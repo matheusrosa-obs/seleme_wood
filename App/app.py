@@ -32,7 +32,9 @@ def load_data(file_path: str | Path) -> pd.DataFrame:
 
 geo = load_geodata("Dados/Processados/eucalipto_sc.geojson")
 
-empresas = load_data("Dados/Processados/empresas_eucalipto_sc.csv")
+empresas_eucalipto = load_data("Dados/Processados/empresas_eucalipto_sc.csv")
+
+empresas_pinus = load_data("Dados/Processados/empresas_pinus_munic.csv")
 
 ################################################
 with open("style.css") as f:
@@ -91,6 +93,125 @@ if st.session_state.pagina == "Demanda 1":
     st.markdown("Distribuição das empresas consumidoras de painéis de madeira por porte e CNAE no Brasil.")
 
     st.divider()
+
+    filtro_pinus_col1, filtro_pinus_col2, filtro_pinus_col3 = st.columns(3)
+
+    with filtro_pinus_col1:
+        estados = empresas_pinus["nm_uf"].dropna().unique()
+        estado_selecionado = st.selectbox(
+            "Selecione o estado:",
+            options=["Todos"] + sorted(estados)
+        )
+
+    with filtro_pinus_col2:
+        if estado_selecionado != "Todos":
+            municipios = empresas_pinus[empresas_pinus["nm_uf"] == estado_selecionado]["nm_municipio_1mai_ca"].dropna().unique()
+        else:
+            municipios = empresas_pinus["nm_municipio_1mai_ca"].dropna().unique()
+        municipio_selecionado = st.selectbox(
+            "Selecione o município:",
+            options=["Todos"] + sorted(municipios)
+        )
+
+    with filtro_pinus_col3:
+        setores = empresas_pinus["nm_cnae_fiscal_principal"].dropna().unique()
+        setor_selecionado = st.selectbox(
+            "Selecione o grupo setor:",
+            options=["Todos"] + sorted(setores)
+        )
+
+    empresas_pinus_filtradas = empresas_pinus.copy()
+    if estado_selecionado != "Todos":
+        empresas_pinus_filtradas = empresas_pinus_filtradas[empresas_pinus_filtradas["nm_uf"] == estado_selecionado]
+    if municipio_selecionado != "Todos":
+        empresas_pinus_filtradas = empresas_pinus_filtradas[empresas_pinus_filtradas["nm_municipio_1mai_ca"] == municipio_selecionado]
+    if setor_selecionado != "Todos":
+        empresas_pinus_filtradas = empresas_pinus_filtradas[empresas_pinus_filtradas["nm_cnae_fiscal_principal"] == setor_selecionado]
+
+    ###### Coordenadas e zoom para Brasil ######
+    center_coords = {"lat": -14.2350, "lon": -51.9253}
+    zoom_level = 3.5
+
+    ###### Coordenadas e zoom para UF selecionada ######
+    if estado_selecionado != "Todos" and not empresas_pinus_filtradas.empty:
+        center_coords = {
+            "lat": empresas_pinus_filtradas["nu_latitude"].mean(),
+            "lon": empresas_pinus_filtradas["nu_longitude"].mean()
+        }
+        zoom_level = 6
+
+    # Atualizando o mapa de acordo com o filtro selecionado
+    fig = px.scatter_mapbox(
+        empresas_pinus_filtradas,
+        lat="nu_latitude",
+        lon="nu_longitude",
+        size='quantidade_empresas',
+        color='quantidade_empresas',
+        color_continuous_scale=px.colors.sequential.Greens,
+        hover_name="nm_municipio_1mai_ca",
+        hover_data={
+            'quantidade_empresas': True,
+            'nu_latitude': False,
+            'nu_longitude': False
+        },
+        center=center_coords,
+        zoom=zoom_level,
+        size_max=40
+    )
+
+    fig.update_layout(
+        mapbox_style="carto-darkmatter",
+        margin=dict(l=0, r=0, t=0, b=0),
+        coloraxis_showscale=False,
+        dragmode="zoom",
+        height=700  # Altura aumentada
+    )
+
+    fig.update_layout(
+        mapbox=dict(
+            uirevision=True
+        )
+    )
+
+    col1, col2 = st.columns([1.5, 1])
+    
+    with col1:
+        st.plotly_chart(fig, width='stretch', config={"scrollZoom": True})
+
+    with col2:
+        tabela_empresas = empresas_pinus_filtradas.rename(columns={
+            "nm_municipio_1mai_ca": "Município",
+            "nm_uf": "UF",
+            "quantidade_empresas": "Quantidade de Empresas"
+        })[["Município", "UF", "Quantidade de Empresas"]]
+
+        if setor_selecionado == "Todos":
+            tabela_empresas = tabela_empresas.groupby(["Município", "UF"], as_index=False).agg({"Quantidade de Empresas": "sum"})
+
+        st.dataframe(
+            tabela_empresas.sort_values(by="Quantidade de Empresas", ascending=False),
+            width='stretch',
+            height=700,
+            hide_index=True
+        )
+
+    st.markdown(
+        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2025).</span>",
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+
+
+
+
+
+
+
+
+
+
 
 ################### PÁGINA 2 ###################
 elif st.session_state.pagina == "Demanda 2":
@@ -203,7 +324,7 @@ elif st.session_state.pagina == "Demanda 2":
     filtro_empresas_col1, filtro_empresas_col2 = st.columns(2)
 
     with filtro_empresas_col1:
-        microrregioes = empresas["Microrregião"].dropna().unique()
+        microrregioes = empresas_eucalipto["Microrregião"].dropna().unique()
         microrregiao_selecionada = st.selectbox(
             "Selecione a microrregião:",
             options=["Todos"] + sorted(microrregioes)
@@ -211,15 +332,15 @@ elif st.session_state.pagina == "Demanda 2":
 
     with filtro_empresas_col2:
         if microrregiao_selecionada != "Todos":
-            municipios = empresas[empresas["Microrregião"] == microrregiao_selecionada]["Município"].dropna().unique()
+            municipios = empresas_eucalipto[empresas_eucalipto["Microrregião"] == microrregiao_selecionada]["Município"].dropna().unique()
         else:
-            municipios = empresas["Município"].dropna().unique()
+            municipios = empresas_eucalipto["Município"].dropna().unique()
         municipio_selecionado = st.selectbox(
             "Selecione o município:",
             options=["Todos"] + sorted(municipios)
         )
 
-    empresas_filtradas = empresas.copy()
+    empresas_filtradas = empresas_eucalipto.copy()
     if microrregiao_selecionada != "Todos":
         empresas_filtradas = empresas_filtradas[empresas_filtradas["Microrregião"] == microrregiao_selecionada]
     if municipio_selecionado != "Todos":
