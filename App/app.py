@@ -19,12 +19,20 @@ def _resolve_path(path: str | Path) -> Path:
 
 ####### Carregando os dados no cache do Streamlit ########
 @st.cache_data
-def load_data(file_path: str | Path) -> gpd.GeoDataFrame:
+def load_geodata(file_path: str | Path) -> gpd.GeoDataFrame:
     resolved_path = _resolve_path(file_path)
     data = gpd.read_file(resolved_path)
     return data
 
-geo = load_data("Dados/Processados/eucalipto_sc.geojson")
+@st.cache_data
+def load_data(file_path: str | Path) -> pd.DataFrame:
+    resolved_path = _resolve_path(file_path)
+    data = pd.read_csv(resolved_path)
+    return data
+
+geo = load_geodata("Dados/Processados/eucalipto_sc.geojson")
+
+empresas = load_data("Dados/Processados/empresas_eucalipto_sc.csv")
 
 ################################################
 with open("style.css") as f:
@@ -60,12 +68,14 @@ st.markdown(
 with st.sidebar:
     st.markdown(
         """
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 30vh;">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 32vh;">
         """,
         unsafe_allow_html=True
     )
-    st.button("Consumo de painéis de madeira", width="stretch")
-    st.button("Produtores de eucalipto", width="stretch")
+    if st.button("Consumo de painéis de madeira"):
+        st.session_state.pagina = "Demanda 1"
+    if st.button("Produção de eucalipto"):
+        st.session_state.pagina = "Demanda 2"
     st.divider()
     st.image("logo_dark.png", width="stretch")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -84,7 +94,7 @@ if st.session_state.pagina == "Demanda 1":
 
 ################### PÁGINA 2 ###################
 elif st.session_state.pagina == "Demanda 2":
-    st.header("Produtores de eucalipto em Santa Catarina")
+    st.header("Produção de eucalipto em Santa Catarina")
 
     st.markdown("Quantidade produzida de lenha e tora de eucalipto (m³) por município em 2024.")
 
@@ -168,7 +178,9 @@ elif st.session_state.pagina == "Demanda 2":
             uirevision=True
         )
     )
+
     col1, col2 = st.columns([2, 1])
+    
     with col1:
         st.plotly_chart(fig, width='stretch', config={"scrollZoom": True})
 
@@ -184,3 +196,45 @@ elif st.session_state.pagina == "Demanda 2":
         "<span style='font-size: 0.85em;'>Fonte: Pesquisa Produção da Extração Vegetal e Silvicultura - IBGE (2025).</span>",
         unsafe_allow_html=True
     )
+
+    st.divider()
+    st.subheader("Empresas produtoras de eucalipto em Santa Catarina")
+
+    filtro_empresas_col1, filtro_empresas_col2 = st.columns(2)
+
+    with filtro_empresas_col1:
+        microrregioes = empresas["Microrregião"].dropna().unique()
+        microrregiao_selecionada = st.selectbox(
+            "Selecione a microrregião:",
+            options=["Todos"] + sorted(microrregioes)
+        )
+
+    with filtro_empresas_col2:
+        if microrregiao_selecionada != "Todos":
+            municipios = empresas[empresas["Microrregião"] == microrregiao_selecionada]["Município"].dropna().unique()
+        else:
+            municipios = empresas["Município"].dropna().unique()
+        municipio_selecionado = st.selectbox(
+            "Selecione o município:",
+            options=["Todos"] + sorted(municipios)
+        )
+
+    empresas_filtradas = empresas.copy()
+    if microrregiao_selecionada != "Todos":
+        empresas_filtradas = empresas_filtradas[empresas_filtradas["Microrregião"] == microrregiao_selecionada]
+    if municipio_selecionado != "Todos":
+        empresas_filtradas = empresas_filtradas[empresas_filtradas["Município"] == municipio_selecionado]
+
+    st.dataframe(
+        empresas_filtradas,
+        width='stretch',
+        height=400,
+        hide_index=True
+    )
+
+    st.markdown(
+        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2025).</span>",
+        unsafe_allow_html=True
+    )
+
+    st.divider()
