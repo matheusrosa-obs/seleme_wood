@@ -85,6 +85,10 @@ if st.session_state.pagina == "Demanda 1":
 elif st.session_state.pagina == "Demanda 2":
     st.header("Produtores de eucalipto em Santa Catarina")
 
+    st.markdown("Quantidade produzida de lenha e tora de eucalipto (m³) por município.")
+
+    st.divider()
+
     geo["tora_eucalipto"] = geo["tora_eucalipto"].fillna(0)
     geo["lenha_eucalipto"] = geo["lenha_eucalipto"].fillna(0)
 
@@ -118,14 +122,18 @@ elif st.session_state.pagina == "Demanda 2":
         lon="nu_longitude",
         size=tipo_produto,
         color=tipo_produto,
+        color_continuous_scale=px.colors.sequential.Blues,
         hover_name="NM_MUN",
         hover_data={
             "lenha_eucalipto": True,
             "tora_eucalipto": True,
-            "altitude": True
+            "altitude": True,
+            'nu_latitude': False,
+            'nu_longitude': False
         },
-        center={"lat": -27.2423, "lon": -50.2189},
-        zoom=5.8
+        center={"lat": -27.6423, "lon": -51.2189},
+        zoom=6.2,
+        size_max=40
     )
 
     fig.update_layout(
@@ -149,3 +157,10 @@ elif st.session_state.pagina == "Demanda 2":
     with col2:
         tabela = geo_filtrado[["NM_MUN", tipo_produto, "altitude"]].sort_values(by=tipo_produto, ascending=False)
         st.dataframe(tabela, width='stretch', height=500, hide_index=True)
+    
+    st.divider()
+
+    st.markdown(
+        "<span style='font-size: 0.85em;'>Fonte: Pesquisa Produção da Extração Vegetal e Silvicultura - IBGE (2025).</span>",
+        unsafe_allow_html=True
+    )

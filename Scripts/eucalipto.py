@@ -16,6 +16,8 @@ def _resolve_path(path: str | Path) -> Path:
 dados = pd.read_excel(_resolve_path("Dados/Brutos/dados.xlsx"))
 mapa = gpd.read_file(_resolve_path("Dados/Brutos/BR_Municipios_2024.shp"))
 
+dados = dados[dados["uf"] == "SC"]
+
 mapa = mapa[mapa["SIGLA_UF"].isin(["SC"])]
 mapa["geometry"] = mapa["geometry"].simplify(0.01)
 
@@ -24,7 +26,7 @@ mapa_merged = mapa.merge(
     dados,
     left_on="NM_MUN",
     right_on="munic",
-    how="left"  # 'left' para manter todos os municípios do mapa
+    how="left"
 )
 
 mapa_merged.head()
@@ -34,8 +36,11 @@ lat_long = pd.read_csv(_resolve_path("Referências/dim_municipio_br.csv"))
 lat_long.head()
 
 lat_long = lat_long[['nm_municipio_1mai_ca',
+                     'nm_uf',
                      'nu_latitude',
                      'nu_longitude']]
+
+lat_long = lat_long[lat_long['nm_uf'] == 'Santa Catarina']
 
 mapa_merged = mapa_merged.merge(
     lat_long,
