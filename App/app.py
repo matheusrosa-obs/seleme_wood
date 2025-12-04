@@ -79,7 +79,11 @@ with st.sidebar:
 
 ################### PÁGINA 1 ###################
 if st.session_state.pagina == "Demanda 1":
-    st.header("Página 1")
+    st.header("Consumidores potenciais de painéis de madeira no Brasil")
+
+    st.markdown("Distribuição das empresas consumidoras de painéis de madeira por porte e CNAE no Brasil.")
+
+    st.divider()
 
 ################### PÁGINA 2 ###################
 elif st.session_state.pagina == "Demanda 2":
@@ -97,7 +101,7 @@ elif st.session_state.pagina == "Demanda 2":
 
     with filtro_col1:
         tipo_produto = st.selectbox(
-            "Selecione o tipo de produto",
+            "Selecione o tipo de produto:",
             options=["lenha_eucalipto", "tora_eucalipto"],
             format_func=lambda x: "Lenha de Eucalipto" if x == "lenha_eucalipto" else "Tora de Eucalipto"
         )
@@ -106,7 +110,7 @@ elif st.session_state.pagina == "Demanda 2":
         regioes = geo["NM_RGI"].dropna().unique()
         regioes_opcoes = ["Todos"] + sorted(regioes)
         regiao_selecionada = st.selectbox(
-            "Selecione a região intermediária",
+            "Selecione a região:",
             options=regioes_opcoes
         )
 

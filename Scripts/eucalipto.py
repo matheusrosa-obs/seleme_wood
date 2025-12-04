@@ -49,6 +49,24 @@ mapa_merged = mapa_merged.merge(
     how="left"
 )
 
+mapa_merged.head()
+
+mapa_merged["eucalipto"] = mapa_merged["lenha_eucalipto"].fillna(0) + mapa_merged["tora_eucalipto"].fillna(0)
+
+mapa_merged['eucalipto_mil'] = mapa_merged['eucalipto'].apply(
+    lambda x: f"{x:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notnull(x) else ""
+)
+
+mapa_merged["lenha_eucalipto_mil"] = mapa_merged["lenha_eucalipto"].apply(
+    lambda x: f"{x:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notnull(x) else ""
+)
+mapa_merged["tora_eucalipto_mil"] = mapa_merged["tora_eucalipto"].apply(
+    lambda x: f"{x:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notnull(x) else ""
+)
+mapa_merged["altitude_mil"] = mapa_merged["altitude"].apply(
+    lambda x: f"{x:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notnull(x) else ""
+)
+
 geojson_data = mapa_merged.to_json()
 
 with open(_resolve_path("Dados/Processados/eucalipto_sc.geojson"), "w", encoding="utf-8") as f:
