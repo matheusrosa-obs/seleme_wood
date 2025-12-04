@@ -60,17 +60,14 @@ st.markdown(
 with st.sidebar:
     st.markdown(
         """
-        <div style="margin-bottom: 18rem;">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 30vh;">
         """,
         unsafe_allow_html=True
     )
-    if st.button("Consumo de painéis de madeira"):
-        st.session_state.pagina = "Demanda 1"
-    if st.button("Produtores de eucalipto"):
-        st.session_state.pagina = "Demanda 2"
-
+    st.button("Consumo de painéis de madeira", width="stretch")
+    st.button("Produtores de eucalipto", width="stretch")
     st.divider()
-    st.image("logo_dark.png", width='stretch')
+    st.image("logo_dark.png", width="stretch")
     st.markdown("</div>", unsafe_allow_html=True)
 
 ################################################
@@ -89,7 +86,7 @@ if st.session_state.pagina == "Demanda 1":
 elif st.session_state.pagina == "Demanda 2":
     st.header("Produtores de eucalipto em Santa Catarina")
 
-    st.markdown("Quantidade produzida de lenha e tora de eucalipto (m³) por município.")
+    st.markdown("Quantidade produzida de lenha e tora de eucalipto (m³) por município em 2024.")
 
     st.divider()
 
@@ -97,13 +94,13 @@ elif st.session_state.pagina == "Demanda 2":
     geo["lenha_eucalipto"] = geo["lenha_eucalipto"].fillna(0)
 
     # Separando os filtros em colunas
-    filtro_col1, filtro_col2 = st.columns(2)
+    filtro_col1, filtro_col2, filtro_col3 = st.columns(3)
 
     with filtro_col1:
         tipo_produto = st.selectbox(
             "Selecione o tipo de produto:",
-            options=["lenha_eucalipto", "tora_eucalipto"],
-            format_func=lambda x: "Lenha de Eucalipto" if x == "lenha_eucalipto" else "Tora de Eucalipto"
+            options=["eucalipto", "lenha_eucalipto", "tora_eucalipto"],
+            format_func=lambda x: "Eucalipto (lenha e tora)" if x == "eucalipto" else ("Lenha de Eucalipto" if x == "lenha_eucalipto" else "Tora de Eucalipto")
         )
 
     with filtro_col2:
@@ -114,10 +111,28 @@ elif st.session_state.pagina == "Demanda 2":
             options=regioes_opcoes
         )
 
+    with filtro_col3:
+        altitude_filtro = st.selectbox(
+            "Limite de altitude:",
+            options=["Todas", "≤ 800 m"]
+        )
+
     # Filtrando o GeoDataFrame
     geo_filtrado = geo.copy()
     if regiao_selecionada != "Todos":
         geo_filtrado = geo_filtrado[geo_filtrado["NM_RGI"] == regiao_selecionada]
+    if altitude_filtro == "≤ 800 m":
+        geo_filtrado = geo_filtrado[geo_filtrado["altitude"] <= 800]
+
+    # Formata os valores para milhar e exibe as colunas desejadas
+    coluna_produto_mil = f"{tipo_produto}_mil"
+    tabela = geo_filtrado[["NM_MUN", coluna_produto_mil, "altitude_mil", tipo_produto]].copy()
+    tabela = tabela.sort_values(by=tipo_produto, ascending=False)
+    tabela = tabela.rename(columns={
+        "NM_MUN": "Município",
+        coluna_produto_mil: "Produção (m³)",
+        "altitude_mil": "Altitude (m)"
+    })    
 
     # Atualizando o mapa de acordo com o filtro selecionado
     fig = px.scatter_mapbox(
@@ -129,9 +144,9 @@ elif st.session_state.pagina == "Demanda 2":
         color_continuous_scale=px.colors.sequential.Blues,
         hover_name="NM_MUN",
         hover_data={
-            "lenha_eucalipto": True,
-            "tora_eucalipto": True,
-            "altitude": True,
+            tipo_produto: False,
+            f"{tipo_produto}_mil": True,
+            "altitude_mil": True,
             'nu_latitude': False,
             'nu_longitude': False
         },
@@ -154,15 +169,16 @@ elif st.session_state.pagina == "Demanda 2":
         )
     )
     col1, col2 = st.columns([2, 1])
-
     with col1:
         st.plotly_chart(fig, width='stretch', config={"scrollZoom": True})
 
     with col2:
-        tabela = geo_filtrado[["NM_MUN", tipo_produto, "altitude"]].sort_values(by=tipo_produto, ascending=False)
-        st.dataframe(tabela, width='stretch', height=500, hide_index=True)
-    
-    st.divider()
+        st.dataframe(
+            tabela[["Município", "Produção (m³)", "Altitude (m)"]],
+            width='stretch',
+            height=500,
+            hide_index=True
+        )
 
     st.markdown(
         "<span style='font-size: 0.85em;'>Fonte: Pesquisa Produção da Extração Vegetal e Silvicultura - IBGE (2025).</span>",
