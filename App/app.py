@@ -70,7 +70,7 @@ with st.sidebar:
         st.session_state.pagina = "Demanda 2"
 
     st.divider()
-    st.image("logo_dark.png", use_container_width=True)
+    st.image("logo_dark.png", width='stretch')
     st.markdown("</div>", unsafe_allow_html=True)
 
 ################################################
@@ -83,18 +83,41 @@ if st.session_state.pagina == "Demanda 1":
 
 ################### PÁGINA 2 ###################
 elif st.session_state.pagina == "Demanda 2":
+    st.header("Produtores de eucalipto em Santa Catarina")
 
-    geo["lenha_eucalipto"] = geo["lenha_eucalipto"].fillna(0)
     geo["tora_eucalipto"] = geo["tora_eucalipto"].fillna(0)
+    geo["lenha_eucalipto"] = geo["lenha_eucalipto"].fillna(0)
 
-    st.divider()
+    # Separando os filtros em colunas
+    filtro_col1, filtro_col2 = st.columns(2)
 
+    with filtro_col1:
+        tipo_produto = st.selectbox(
+            "Selecione o tipo de produto",
+            options=["lenha_eucalipto", "tora_eucalipto"],
+            format_func=lambda x: "Lenha de Eucalipto" if x == "lenha_eucalipto" else "Tora de Eucalipto"
+        )
+
+    with filtro_col2:
+        regioes = geo["NM_RGI"].dropna().unique()
+        regioes_opcoes = ["Todos"] + sorted(regioes)
+        regiao_selecionada = st.selectbox(
+            "Selecione a região intermediária",
+            options=regioes_opcoes
+        )
+
+    # Filtrando o GeoDataFrame
+    geo_filtrado = geo.copy()
+    if regiao_selecionada != "Todos":
+        geo_filtrado = geo_filtrado[geo_filtrado["NM_RGI"] == regiao_selecionada]
+
+    # Atualizando o mapa de acordo com o filtro selecionado
     fig = px.scatter_mapbox(
-        geo,
+        geo_filtrado,
         lat="nu_latitude",
         lon="nu_longitude",
-        size="lenha_eucalipto",
-        color="lenha_eucalipto",
+        size=tipo_produto,
+        color=tipo_produto,
         hover_name="NM_MUN",
         hover_data={
             "lenha_eucalipto": True,
@@ -102,18 +125,17 @@ elif st.session_state.pagina == "Demanda 2":
             "altitude": True
         },
         center={"lat": -27.2423, "lon": -50.2189},
-        zoom=5.8  # Defina um zoom inicial
+        zoom=5.8
     )
 
     fig.update_layout(
         mapbox_style="carto-darkmatter",
-        mapbox_accesstoken="SEU_MAPBOX_TOKEN_AQUI",
         margin=dict(l=0, r=0, t=0, b=0),
         coloraxis_showscale=False,
-        dragmode="zoom"  # Permite zoom com mouse
+        dragmode="zoom",
+        height=500
     )
 
-    # Ativa o scroll zoom no gráfico
     fig.update_layout(
         mapbox=dict(
             uirevision=True
@@ -125,4 +147,5 @@ elif st.session_state.pagina == "Demanda 2":
         st.plotly_chart(fig, width='stretch', config={"scrollZoom": True})
 
     with col2:
-        st.write("Tabela de produtores de eucalipto")
+        tabela = geo_filtrado[["NM_MUN", tipo_produto, "altitude"]].sort_values(by=tipo_produto, ascending=False)
+        st.dataframe(tabela, width='stretch', height=500, hide_index=True)
