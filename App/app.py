@@ -265,25 +265,22 @@ elif st.session_state.pagina == "Demanda 2":
         "altitude_mil": "Altitude (m)"
     })    
 
-    # Atualizando o mapa de acordo com o filtro selecionado
-    fig = px.scatter_mapbox(
+    # Atualizando o mapa para exibir polígonos dos municípios ao invés de pontos
+    fig = px.choropleth_mapbox(
         geo_filtrado,
-        lat="nu_latitude",
-        lon="nu_longitude",
-        size=tipo_produto,
+        geojson=geo_filtrado.geometry,
+        locations=geo_filtrado.index,
         color=tipo_produto,
-        color_continuous_scale=px.colors.sequential.Blues,
+        color_continuous_scale=px.colors.sequential.YlOrRd,
         hover_name="NM_MUN",
         hover_data={
             tipo_produto: False,
             f"{tipo_produto}_mil": True,
-            "altitude_mil": True,
-            'nu_latitude': False,
-            'nu_longitude': False
+            "altitude_mil": True
         },
         center={"lat": -27.6423, "lon": -51.2189},
         zoom=6.2,
-        size_max=40
+        opacity=0.7,
     )
 
     fig.update_layout(
