@@ -4,6 +4,14 @@ import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 import plotly.express as px
+from streamlit_folium import st_folium
+import os
+from utils import (
+    CalculadoraDistanciasAvancada,
+    AnalisadorClusters,
+    criar_mapa_distancias_cacador,
+    obter_rota_ors
+)
 
 from warnings import filterwarnings
 import re
@@ -87,6 +95,8 @@ with st.sidebar:
         st.session_state.pagina = "Demanda 1"
     if st.button("Produção de eucalipto"):
         st.session_state.pagina = "Demanda 2"
+    if st.button("Distâncias e rotas"):
+        st.session_state.pagina = "Distâncias Caçador"
     st.divider()
     st.image("logo_dark.png", width="stretch")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -485,3 +495,238 @@ elif st.session_state.pagina == "Demanda 2":
     )
 
     st.divider()
+
+
+
+################### PÁGINA 3 ###################
+elif st.session_state.pagina == "Distâncias Caçador":
+    municipio_ref = {
+        'cd_mun_ibge': '4203006',
+        'nm_mun': 'Caçador',
+        'sg_uf': 'SC',
+        'latitude': -26.790294,
+        'longitude': -51.000398
+    }
+
+    # Tenta pegar do st.secrets; se não existir, tenta variável de ambiente
+    ORS_API_KEY = None
+    try:
+        ORS_API_KEY = st.secrets["ors"]["api_key"]
+    except Exception:
+        ORS_API_KEY = os.getenv("ORS_API_KEY", None)
+
+    # Header
+    st.title("📍 Análise Geoespacial de Distâncias")
+    st.markdown("**Referência fixa:** Município de **Caçador/SC** | Distâncias calculadas entre Caçador e todas as empresas da base")
+
+    # Carregamento automático de dados
+    @st.cache_data(show_spinner="📂 Carregando dados...")
+    def carregar_dados():
+        arquivo_csv = Path(__file__).parent / "Empresas_Cnae_Geo.csv"
+        if arquivo_csv.exists():
+            df = pd.read_csv(arquivo_csv, dtype={'cd_mun_ibge': str})
+            return df
+        else:
+            return None
+
+    df_geo = carregar_dados()
+
+    if df_geo is None:
+        st.error("❌ Arquivo Empresas_Cnae_Geo.csv não encontrado!")
+        st.stop()
+
+    # Botão principal no topo
+    col_btn, col_info = st.columns([1, 4])
+
+    with col_btn:
+        if st.button("🚀 Processar", type="primary", use_container_width=True):
+            with st.spinner("⏳ Processando..."):
+                # Cálculo de distâncias
+                calc = CalculadoraDistanciasAvancada(df_geo, municipio_ref)
+                df_dist = calc.calcular_todas_distancias()
+                kpis = calc.extrair_kpis_completos(df_dist)
+
+                # Clustering
+                analisador = AnalisadorClusters(df_dist)
+                df_cluster = analisador.analise_completa(raio_dbscan=100)
+
+                # Salvar em session_state
+                st.session_state['df_dist'] = df_cluster
+                st.session_state['kpis'] = kpis
+                st.session_state['processado'] = True
+
+                st.success("✅ Processamento concluído!")
+                st.rerun()
+
+    with col_info:
+        st.info(f"📍 Total de registros: **{len(df_geo):,}**")
+
+    st.markdown("---")
+
+    # Área principal
+    if 'processado' not in st.session_state:
+        st.info("👈 Clique em **🚀 Processar** para calcular distâncias e clusters")
+
+    else:
+        df_dist = st.session_state['df_dist']
+        kpis = st.session_state['kpis']
+
+        # KPIs principais
+        st.markdown("### 📊 KPIs Principais")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        mp = kpis['mais_proximo']
+        md = kpis['mais_distante']
+        est = kpis['estatisticas']
+        dist = kpis['distribuicao']
+
+        # Função helper para tratar strings vazias/NaN
+        def safe_str(value, max_len=30, default="(Sem nome)"):
+            if pd.isna(value) or value == "" or not isinstance(value, str):
+                return default
+            return value[:max_len] + ("..." if len(value) > max_len else "")
+
+        with col1:
+            st.metric("🟢 Mais Próximo", f"{mp['distancia_km']:.1f} km", safe_str(mp['nome_fantasia']))
+
+        with col2:
+            st.metric("🔴 Mais Distante", f"{md['distancia_km']:.1f} km", safe_str(md['nome_fantasia']))
+
+        with col3:
+            st.metric("📏 Distância Média", f"{est['media_km']:.1f} km", f"Med: {est['mediana_km']:.1f} km")
+
+        with col4:
+            st.metric("📍 Total de Pontos", f"{len(df_dist):,}")
+
+        st.markdown("---")
+
+        # Seleção de empresa
+        st.markdown("### 📌 Seleção de Empresa para Destaque")
+
+        col_sel1, col_sel2 = st.columns([3, 1])
+
+        with col_sel1:
+            nomes_fantasia = (
+                df_dist['nm_nome_fantasia']
+                .dropna()
+                .drop_duplicates()
+                .sort_values()
+                .tolist()
+            )
+
+            nm_fantasia_sel = st.selectbox(
+                "🏢 Selecione uma empresa para destacar no mapa e traçar a rota:",
+                options=["(Nenhuma)"] + nomes_fantasia,
+                index=0,
+                help="A empresa selecionada será destacada em azul no mapa com rota traçada"
+            )
+
+            if nm_fantasia_sel == "(Nenhuma)":
+                nm_fantasia_sel = None
+
+        with col_sel2:
+            if nm_fantasia_sel:
+                empresa_info = df_dist[df_dist['nm_nome_fantasia'] == nm_fantasia_sel].iloc[0]
+                
+                # Obter distância viária da API
+                dist_viaria = None
+                if ORS_API_KEY:
+                    coord_ref = (municipio_ref['latitude'], municipio_ref['longitude'])
+                    coord_dest = (empresa_info['latitude'], empresa_info['longitude'])
+                    rota = obter_rota_ors(coord_ref, coord_dest, api_key=ORS_API_KEY)
+                    if rota:
+                        dist_viaria = rota['distance_km']
+                
+                # Exibir distância reta
+                st.metric(
+                    "Distância Reta",
+                    f"{empresa_info['distancia_km']:.2f} km",
+                    f"{empresa_info['nm_mun']}/{empresa_info['sg_uf']}"
+                )
+                
+                # Exibir distância viária se disponível
+                if dist_viaria:
+                    diferenca = dist_viaria - empresa_info['distancia_km']
+                    st.metric(
+                        "Distância Viária",
+                        f"{dist_viaria:.2f} km",
+                        f"+{diferenca:.2f} km" if diferenca > 0 else f"{diferenca:.2f} km"
+                    )
+
+        # Mapa
+        st.markdown("### 🗺️ Mapa Interativo de Distâncias")
+
+        with st.spinner("🗺️ Gerando mapa..."):
+            mapa = criar_mapa_distancias_cacador(
+                df_distancias=df_dist,
+                municipio_ref=municipio_ref,
+                kpis=kpis,
+                nm_fantasia_selecionado=nm_fantasia_sel,
+                ors_api_key=ORS_API_KEY
+            )
+
+        st_folium(mapa, width=1200, height=650, returned_objects=[])
+
+        st.markdown("---")
+
+        # Tabela detalhada
+        st.markdown("### 📋 Tabela Detalhada")
+
+        df_view = df_dist.sort_values('distancia_km').copy()
+
+        # Destacar empresa selecionada na tabela
+        if nm_fantasia_sel:
+            mask_sel = df_view['nm_nome_fantasia'] == nm_fantasia_sel
+            df_view = pd.concat([df_view[mask_sel], df_view[~mask_sel]])
+
+        cols_mostrar = [
+            'nm_nome_fantasia', 'nm_razao_social',
+            'nm_mun', 'sg_uf', 'distancia_km',
+            'nm_porte_obs', 'cd_cnae_fiscal_principal',
+            'nm_cnae_fiscal_principal', 'cluster_dbscan', 'cluster_kmeans'
+        ]
+        cols_mostrar = [c for c in cols_mostrar if c in df_view.columns]
+
+        st.dataframe(
+            df_view[cols_mostrar].reset_index(drop=True),
+            use_container_width=True,
+            height=400
+        )
+
+        # Análise de clusters
+        st.markdown("### 🔍 Análise de Clusters (DBSCAN)")
+
+        if 'cluster_dbscan' in df_view.columns:
+            clusters_validos = sorted([c for c in df_view['cluster_dbscan'].unique() if c != -1])
+
+            if clusters_validos:
+                for c_id in clusters_validos:
+                    df_c = df_view[df_view['cluster_dbscan'] == c_id]
+                    dist_media = df_c['distancia_km'].mean()
+                    muni_top = df_c['nm_mun'].value_counts().head(3)
+
+                    with st.expander(f"🔵 Cluster {c_id} - {len(df_c)} empresas"):
+                        col_c1, col_c2, col_c3 = st.columns(3)
+                        col_c1.metric("Empresas", len(df_c))
+                        col_c2.metric("Distância Média", f"{dist_media:.1f} km")
+                        col_c3.metric("Municípios", df_c['nm_mun'].nunique())
+
+                        st.markdown("**Principais municípios:**")
+                        for mun, count in muni_top.items():
+                            st.write(f"- {mun}: {count} empresas")
+            else:
+                st.info("ℹ️ Nenhum cluster denso identificado com os parâmetros atuais (raio 100 km)")
+
+        # Download
+        st.markdown("---")
+        st.markdown("### 💾 Download dos Dados")
+
+        csv = df_view.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="⬇️ Baixar tabela completa (CSV)",
+            data=csv,
+            file_name="analise_distancias_cacador.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
