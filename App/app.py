@@ -27,7 +27,10 @@ def load_geodata(file_path: str | Path) -> gpd.GeoDataFrame:
 @st.cache_data
 def load_data(file_path: str | Path) -> pd.DataFrame:
     resolved_path = _resolve_path(file_path)
-    data = pd.read_csv(resolved_path)
+    if str(resolved_path).lower().endswith(('.xlsx', '.xls')):
+        data = pd.read_excel(resolved_path)
+    else:
+        data = pd.read_csv(resolved_path)
     return data
 
 geo = load_geodata("Dados/Processados/eucalipto_sc.geojson")
@@ -35,6 +38,12 @@ geo = load_geodata("Dados/Processados/eucalipto_sc.geojson")
 empresas_eucalipto = load_data("Dados/Processados/empresas_eucalipto_sc.csv")
 
 empresas_pinus = load_data("Dados/Processados/empresas_pinus_munic.csv")
+
+empresas_pinus_tabela = load_data("Dados/Processados/empresas_pinus_tabela.csv")
+
+consumo_painel = load_data("Dados/Processados/consumo_painel.xlsx")
+
+consumo_painel_aberto = load_data("Dados/Processados/consumo_painel_aberto.xlsx")
 
 ################################################
 with open("style.css") as f:
@@ -81,6 +90,11 @@ with st.sidebar:
     st.divider()
     st.image("logo_dark.png", width="stretch")
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+
+
+
 
 ################################################
 # CONTEÚDO DAS PÁGINAS
@@ -201,10 +215,126 @@ if st.session_state.pagina == "Demanda 1":
     )
 
     st.divider()
+    st.subheader("Empresas potenciais consumidoras de painéis no Brasil")
 
+    # Primeira linha de filtros
+    filtro_empresas_row1_col1, filtro_empresas_row1_col2 = st.columns(2)
+    # Segunda linha de filtros
+    filtro_empresas_row2_col1, filtro_empresas_row2_col2 = st.columns(2)
 
+    with filtro_empresas_row1_col1:
+        ufs = empresas_pinus_tabela["UF"].dropna().unique()
+        uf_selecionada = st.selectbox(
+            "Selecione a UF:",
+            options=["Todos"] + sorted(ufs),
+            key="uf_empresas"
+        )
 
+    with filtro_empresas_row1_col2:
+        if uf_selecionada != "Todos":
+            microrregioes = empresas_pinus_tabela[empresas_pinus_tabela["UF"] == uf_selecionada]["Microrregião"].dropna().unique()
+        else:
+            microrregioes = empresas_pinus_tabela["Microrregião"].dropna().unique()
+        microrregiao_selecionada = st.selectbox(
+            "Selecione a microrregião:",
+            options=["Todos"] + sorted(microrregioes),
+            key="microrregiao_empresas"
+        )
 
+    with filtro_empresas_row2_col1:
+        if uf_selecionada != "Todos" and microrregiao_selecionada != "Todos":
+            municipios = empresas_pinus_tabela[
+                (empresas_pinus_tabela["UF"] == uf_selecionada) &
+                (empresas_pinus_tabela["Microrregião"] == microrregiao_selecionada)
+            ]["Município"].dropna().unique()
+        elif uf_selecionada != "Todos":
+            municipios = empresas_pinus_tabela[empresas_pinus_tabela["UF"] == uf_selecionada]["Município"].dropna().unique()
+        elif microrregiao_selecionada != "Todos":
+            municipios = empresas_pinus_tabela[empresas_pinus_tabela["Microrregião"] == microrregiao_selecionada]["Município"].dropna().unique()
+        else:
+            municipios = empresas_pinus_tabela["Município"].dropna().unique()
+        municipio_selecionado = st.selectbox(
+            "Selecione o município:",
+            options=["Todos"] + sorted(municipios),
+            key="municipio_empresas"
+        )
+
+    with filtro_empresas_row2_col2:
+        setores = empresas_pinus_tabela["CNAE Principal"].dropna().unique()
+        setor_selecionado = st.selectbox(
+            "Selecione o setor (CNAE Principal):",
+            options=["Todos"] + sorted(setores),
+            key="setor_empresas"
+        )
+
+    empresas_filtradas = empresas_pinus_tabela.copy()
+    if uf_selecionada != "Todos":
+        empresas_filtradas = empresas_filtradas[empresas_filtradas["UF"] == uf_selecionada]
+    if microrregiao_selecionada != "Todos":
+        empresas_filtradas = empresas_filtradas[empresas_filtradas["Microrregião"] == microrregiao_selecionada]
+    if municipio_selecionado != "Todos":
+        empresas_filtradas = empresas_filtradas[empresas_filtradas["Município"] == municipio_selecionado]
+    if setor_selecionado != "Todos":
+        empresas_filtradas = empresas_filtradas[empresas_filtradas["CNAE Principal"] == setor_selecionado]
+
+    st.dataframe(
+        empresas_filtradas,
+        width='stretch',
+        height=400,
+        hide_index=True
+    )
+
+    st.markdown(
+        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2025).</span>",
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### Produção e consumo de painéis de madeira compensada (1997-2023)")
+        fig1 = px.line(
+            consumo_painel,
+            x="Ano",
+            y=consumo_painel.columns[-3:],
+            markers=True,
+            labels={"Ano": "Ano", "value": "Consumo (m³)", "variable": "Tipo de Painel"},
+        )
+        fig1.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=350, legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5))
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        st.markdown("#### Consumo aparente por tipo de painel (1997-2023)")
+        consumo_painel_aberto_long = consumo_painel_aberto.melt(
+            id_vars="Ano",
+            value_vars=consumo_painel_aberto.columns[-3:],
+            var_name="Tipo de Painel",
+            value_name="Consumo (m³)"
+        )
+        fig2 = px.line(
+            consumo_painel_aberto_long,
+            x="Ano",
+            y="Consumo (m³)",
+            color="Tipo de Painel",
+            markers=True,
+            labels={"Ano": "Ano", "Consumo (m³)": "Consumo (m³)", "Tipo de Painel": "Tipo de Painel"}
+        )
+        fig2.update_layout(
+            margin=dict(l=0, r=0, t=30, b=0),
+            height=350,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5),
+            yaxis=dict(
+                dtick=4000000,
+                gridcolor="rgba(200,200,200,0.3)"
+            )
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.markdown(
+        "<span style='font-size: 0.85em;'>Fonte: MDIC (2025), IBGE (2025).</span>",
+        unsafe_allow_html=True
+    )
 
 
 
@@ -279,8 +409,7 @@ elif st.session_state.pagina == "Demanda 2":
             "altitude_mil": True
         },
         center={"lat": -27.6423, "lon": -51.2189},
-        zoom=6.2,
-        opacity=0.7,
+        zoom=6.2
     )
 
     fig.update_layout(

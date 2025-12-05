@@ -35,16 +35,18 @@ empresas = empresas.merge(
 
 empresas['ano_inicio'] = empresas['dt_inicio_atividade'].astype(str).str[:4]
 
-empresas = empresas[['nm_razao_social', 'nm_porte_obs', 'ano_inicio',
+empresas = empresas[['nm_razao_social', 'nm_nome_socio', 'nm_porte_obs', 'ano_inicio',
                      'nm_microrregiao', 'nm_municipio_1mai_sa', 'endereco_completo', 'nu_telefone_1',
                      'nm_correio_eletronico'
                      ]]
-
+xc
 empresas['nm_razao_social'] = empresas['nm_razao_social'].str.title()
+empresas['nm_nome_socio'] = empresas['nm_nome_socio'].str.title()
 empresas['endereco_completo'] = empresas['endereco_completo'].str.title()
 
 empresas = empresas.rename(columns={
     "nm_razao_social": "Razão Social",
+    "nm_nome_socio": "Nome do Sócio",
     "nm_porte_obs": "Porte da Empresa",
     "ano_inicio": "Ano de Início",
     "nm_microrregiao": "Microrregião",
