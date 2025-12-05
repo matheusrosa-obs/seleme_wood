@@ -5,7 +5,7 @@ plotly==6.2.0
 streamlit_folium
 geopy
 folium
-sklearn
+scikit-learn
 matplotlib
 typing
 requests
