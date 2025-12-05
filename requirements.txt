@@ -9,3 +9,4 @@ scikit-learn
 matplotlib
 typing
 requests
+openpyxl
