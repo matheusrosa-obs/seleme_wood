@@ -200,7 +200,7 @@ if st.session_state.pagina == "Demanda 1":
     col1, col2 = st.columns([1.5, 1])
     
     with col1:
-        st.plotly_chart(fig, width='stretch', config={"scrollZoom": True})
+        st.plotly_chart(fig, config={"scrollZoom": True})
 
     with col2:
         tabela_empresas = empresas_pinus_filtradas.rename(columns={
@@ -437,12 +437,11 @@ elif st.session_state.pagina == "Demanda 2":
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.plotly_chart(fig, width='stretch', config={"scrollZoom": True})
+        st.plotly_chart(fig, config={"scrollZoom": True})
 
     with col2:
         st.dataframe(
             tabela[["Município", "Produção (m³)", "Altitude (m)"]],
-            width='stretch',
             height=500,
             hide_index=True
         )
@@ -482,7 +481,6 @@ elif st.session_state.pagina == "Demanda 2":
 
     st.dataframe(
         empresas_filtradas,
-        width='stretch',
         height=400,
         hide_index=True
     )
