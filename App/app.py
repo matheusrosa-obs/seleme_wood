@@ -288,7 +288,6 @@ if st.session_state.pagina == "Demanda 1":
 
     st.dataframe(
         empresas_filtradas,
-        width='stretch',
         height=400,
         hide_index=True
     )
