@@ -98,7 +98,7 @@ with st.sidebar:
     if st.button("Distâncias e rotas"):
         st.session_state.pagina = "Distâncias Caçador"
     st.divider()
-    st.image("logo_dark.png", width="stretch")
+    st.image("logo_dark.png")
     st.markdown("</div>", unsafe_allow_html=True)
 
 
