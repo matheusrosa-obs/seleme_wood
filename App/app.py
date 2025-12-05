@@ -214,7 +214,6 @@ if st.session_state.pagina == "Demanda 1":
 
         st.dataframe(
             tabela_empresas.sort_values(by="Quantidade de Empresas", ascending=False),
-            width='stretch',
             height=700,
             hide_index=True
         )
