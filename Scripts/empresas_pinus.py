@@ -50,12 +50,8 @@ empresas = empresas.rename(columns={
     "nm_microrregiao": "Microrregião",
     "nm_municipio_1mai_sa": "Município",
     "endereco_completo": "Endereço Completo",
-    "nu_telefone_1": "Telefone",
-    "nm_correio_eletronico": "E-mail",
     'nm_cnae_fiscal_principal': "CNAE Principal"
 })
-
-empresas['Telefone'] = empresas['Telefone'].astype(str).str.replace(r'^(\d{4})(\d+)$', r'\1-\2', regex=True)
 
 empresas = empresas.sort_values(by="Razão Social").reset_index(drop=True)
 

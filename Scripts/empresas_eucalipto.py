@@ -39,7 +39,7 @@ empresas = empresas[['nm_razao_social', 'nm_nome_socio', 'nm_porte_obs', 'ano_in
                      'nm_microrregiao', 'nm_municipio_1mai_sa', 'endereco_completo', 'nu_telefone_1',
                      'nm_correio_eletronico'
                      ]]
-xc
+
 empresas['nm_razao_social'] = empresas['nm_razao_social'].str.title()
 empresas['nm_nome_socio'] = empresas['nm_nome_socio'].str.title()
 empresas['endereco_completo'] = empresas['endereco_completo'].str.title()
@@ -52,11 +52,7 @@ empresas = empresas.rename(columns={
     "nm_microrregiao": "Microrregião",
     "nm_municipio_1mai_sa": "Município",
     "endereco_completo": "Endereço Completo",
-    "nu_telefone_1": "Telefone",
-    "nm_correio_eletronico": "E-mail"
 })
-
-empresas['Telefone'] = empresas['Telefone'].astype(str).str.replace(r'^(\d{4})(\d+)$', r'\1-\2', regex=True)
 
 empresas = empresas.sort_values(by="Razão Social")
 
