@@ -114,7 +114,7 @@ with st.sidebar:
 if st.session_state.pagina == "Demanda 1":
     st.header("Consumidores potenciais de painéis de madeira no Brasil")
 
-    st.markdown("Distribuição das empresas consumidoras de painéis de madeira por porte e CNAE no Brasil.")
+    st.markdown("Distribuição das empresas consumidoras de painéis de madeira por porte e CNAE no Brasil. Empresas ativas em 2024.")
 
     st.divider()
 
@@ -219,7 +219,7 @@ if st.session_state.pagina == "Demanda 1":
         )
 
     st.markdown(
-        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2025).</span>",
+        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2024).</span>",
         unsafe_allow_html=True
     )
 
@@ -240,26 +240,16 @@ if st.session_state.pagina == "Demanda 1":
         )
 
     with filtro_empresas_row1_col2:
-        if uf_selecionada != "Todos":
-            microrregioes = empresas_pinus_tabela[empresas_pinus_tabela["UF"] == uf_selecionada]["Microrregião"].dropna().unique()
-        else:
-            microrregioes = empresas_pinus_tabela["Microrregião"].dropna().unique()
-        microrregiao_selecionada = st.selectbox(
-            "Selecione a microrregião:",
-            options=["Todos"] + sorted(microrregioes),
-            key="microrregiao_empresas"
+        portes = empresas_pinus_tabela["Porte da Empresa"].dropna().unique()
+        porte_selecionado = st.selectbox(
+            "Selecione o porte:",
+            options=["Todos"] + sorted(portes),
+            key="porte_empresas"
         )
 
     with filtro_empresas_row2_col1:
-        if uf_selecionada != "Todos" and microrregiao_selecionada != "Todos":
-            municipios = empresas_pinus_tabela[
-                (empresas_pinus_tabela["UF"] == uf_selecionada) &
-                (empresas_pinus_tabela["Microrregião"] == microrregiao_selecionada)
-            ]["Município"].dropna().unique()
-        elif uf_selecionada != "Todos":
+        if uf_selecionada != "Todos":
             municipios = empresas_pinus_tabela[empresas_pinus_tabela["UF"] == uf_selecionada]["Município"].dropna().unique()
-        elif microrregiao_selecionada != "Todos":
-            municipios = empresas_pinus_tabela[empresas_pinus_tabela["Microrregião"] == microrregiao_selecionada]["Município"].dropna().unique()
         else:
             municipios = empresas_pinus_tabela["Município"].dropna().unique()
         municipio_selecionado = st.selectbox(
@@ -279,21 +269,32 @@ if st.session_state.pagina == "Demanda 1":
     empresas_filtradas = empresas_pinus_tabela.copy()
     if uf_selecionada != "Todos":
         empresas_filtradas = empresas_filtradas[empresas_filtradas["UF"] == uf_selecionada]
-    if microrregiao_selecionada != "Todos":
-        empresas_filtradas = empresas_filtradas[empresas_filtradas["Microrregião"] == microrregiao_selecionada]
+    if porte_selecionado != "Todos":
+        empresas_filtradas = empresas_filtradas[empresas_filtradas["Porte da Empresa"] == porte_selecionado]
     if municipio_selecionado != "Todos":
         empresas_filtradas = empresas_filtradas[empresas_filtradas["Município"] == municipio_selecionado]
     if setor_selecionado != "Todos":
         empresas_filtradas = empresas_filtradas[empresas_filtradas["CNAE Principal"] == setor_selecionado]
 
     st.dataframe(
-        empresas_filtradas,
+        empresas_filtradas[
+            [
+                "Razão Social",
+                "Porte da Empresa",
+                "Ano de Início",
+                "UF",
+                "Microrregião",
+                "Município",
+                "Endereço Completo",
+                "CNAE Principal"
+            ]
+        ],
         height=400,
         hide_index=True
     )
 
     st.markdown(
-        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2025).</span>",
+        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2024).</span>",
         unsafe_allow_html=True
     )
 
@@ -308,6 +309,7 @@ if st.session_state.pagina == "Demanda 1":
             y=consumo_painel.columns[-3:],
             markers=True,
             labels={"Ano": "Ano", "value": "Consumo (m³)", "variable": "Tipo de Painel"},
+            title="Brasil"
         )
         fig1.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=350, legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5))
         st.plotly_chart(fig1, use_container_width=True)
@@ -326,7 +328,8 @@ if st.session_state.pagina == "Demanda 1":
             y="Consumo (m³)",
             color="Tipo de Painel",
             markers=True,
-            labels={"Ano": "Ano", "Consumo (m³)": "Consumo (m³)", "Tipo de Painel": "Tipo de Painel"}
+            labels={"Ano": "Ano", "Consumo (m³)": "Consumo (m³)", "Tipo de Painel": "Tipo de Painel"},
+            title="Brasil"
         )
         fig2.update_layout(
             margin=dict(l=0, r=0, t=30, b=0),
@@ -340,7 +343,7 @@ if st.session_state.pagina == "Demanda 1":
         st.plotly_chart(fig2, use_container_width=True)
 
     st.markdown(
-        "<span style='font-size: 0.85em;'>Fonte: MDIC (2025), IBGE (2025).</span>",
+        "<span style='font-size: 0.85em;'>Fonte: MDIC (2024), IBGE (2024).</span>",
         unsafe_allow_html=True
     )
 
@@ -447,7 +450,7 @@ elif st.session_state.pagina == "Demanda 2":
         )
 
     st.markdown(
-        "<span style='font-size: 0.85em;'>Fonte: Pesquisa Produção da Extração Vegetal e Silvicultura - IBGE (2025).</span>",
+        "<span style='font-size: 0.85em;'>Fonte: Pesquisa Produção da Extração Vegetal e Silvicultura - IBGE (2024).</span>",
         unsafe_allow_html=True
     )
 
@@ -486,7 +489,7 @@ elif st.session_state.pagina == "Demanda 2":
     )
 
     st.markdown(
-        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2025).</span>",
+        "<span style='font-size: 0.85em;'>Fonte: Receita Federal (2024).</span>",
         unsafe_allow_html=True
     )
 
