@@ -631,9 +631,9 @@ elif st.session_state.pagina == "Distâncias Caçador":
         kpis = st.session_state["kpis"]
 
         # KPIs principais
-        st.markdown("### 📊 KPIs Principais")
+#        st.markdown("### 📊 KPIs Principais")
 
-        col1, col2, col3, col4 = st.columns(4)
+#        col1, col2, col3, col4 = st.columns(4)
 
         mp = kpis["mais_proximo"]
         md = kpis["mais_distante"]
@@ -646,31 +646,31 @@ elif st.session_state.pagina == "Distâncias Caçador":
                 return default
             return value[:max_len] + ("..." if len(value) > max_len else "")
 
-        with col1:
-            st.metric(
-                "🟢 Empresa mais próxima de algum porto",
-                f"{mp['distancia_km']:.1f} km",
-                f"{safe_str(mp['ref_mais_proxima_nome'])}",
-            )
+#        with col1:
+#            st.metric(
+#                "🟢 Empresa mais próxima de algum porto",
+#                f"{mp['distancia_km']:.1f} km",
+#                f"{safe_str(mp['ref_mais_proxima_nome'])}",
+#            )
 
-        with col2:
-            st.metric(
-                "🔴 Empresa mais distante (mín. até porto)",
-                f"{md['distancia_km']:.1f} km",
-                f"{safe_str(md['ref_mais_proxima_nome'])}",
-            )
+#        with col2:
+#            st.metric(
+#                "🔴 Empresa mais distante (mín. até porto)",
+#                f"{md['distancia_km']:.1f} km",
+#                f"{safe_str(md['ref_mais_proxima_nome'])}",
+#            )
 
-        with col3:
-            st.metric(
-                "📏 Distância Média (mín. até porto)",
-                f"{est['media_km']:.1f} km",
-                f"Med: {est['mediana_km']:.1f} km",
-            )
+#        with col3:
+#            st.metric(
+#                "📏 Distância Média (mín. até porto)",
+#                f"{est['media_km']:.1f} km",
+#                f"Med: {est['mediana_km']:.1f} km",
+#            )
 
-        with col4:
-            st.metric("📍 Total de Pontos", f"{len(df_dist):,}")
+#        with col4:
+#            st.metric("📍 Total de Pontos", f"{len(df_dist):,}")
 
-        st.markdown("---")
+#        st.markdown("---")
 
         # Seleção de empresa + filtro de porto
         st.markdown("### 📌 Seleção de Empresa e Porto de Interesse")
