@@ -525,7 +525,7 @@ elif st.session_state.pagina == "Distâncias Caçador":
     },
     {
         "id": "itapoa",
-        "nome": "Porto de itapoa",
+        "nome": "Porto de Itapoa",
         "sg_uf": "SC",
         "latitude": -26.178920,
         "longitude": -48.603941,
@@ -546,7 +546,7 @@ elif st.session_state.pagina == "Distâncias Caçador":
     },
     {
         "id": "imbituba",
-        "nome": "Porto de imbituba",
+        "nome": "Porto de Imbituba",
         "sg_uf": "SC",
         "latitude": -28.232693,
         "longitude": -48.650968,
