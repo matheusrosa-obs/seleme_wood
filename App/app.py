@@ -483,7 +483,17 @@ elif st.session_state.pagina == "Demanda 2":
         empresas_filtradas = empresas_filtradas[empresas_filtradas["Município"] == municipio_selecionado]
 
     st.dataframe(
-        empresas_filtradas,
+        empresas_filtradas[
+            [
+                "Razão Social",
+                "Porte da Empresa",
+                "Ano de Início",
+                "UF",
+                "Microrregião",
+                "Município",
+                "Endereço Completo",
+                "CNAE Principal"
+            ]],
         height=400,
         hide_index=True
     )
