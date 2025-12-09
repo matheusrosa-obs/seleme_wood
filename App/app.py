@@ -684,10 +684,10 @@ elif st.session_state.pagina == "Distâncias Caçador":
         with col_sel1:
             nomes_fantasia = (
                 df_dist["nm_nome_fantasia"]
-                .dropna()
-                .drop_duplicates()
-                .sort_values()
-                .tolist()
+                    .dropna()
+                    .drop_duplicates()
+                    .sort_values()
+                    .tolist()
             )
 
             nm_fantasia_sel = st.selectbox(
@@ -721,27 +721,53 @@ elif st.session_state.pagina == "Distâncias Caçador":
 
         # Métricas da empresa selecionada
         col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            if nm_fantasia_sel:
-                empresa_info = df_dist[df_dist["nm_nome_fantasia"] == nm_fantasia_sel].iloc[0]
+
+        # Vamos pré-calcular rotas viárias para todos os portos (se possível)
+        rotas_empresa = []
+        melhor_rota_viaria = None  # dict com keys: ref, distance_km, duration_min, geometry
+
+        if nm_fantasia_sel:
+            empresa_info = df_dist[df_dist["nm_nome_fantasia"] == nm_fantasia_sel].iloc[0]
+
+            with col_m1:
                 st.metric(
                     "Distância mínima (reta) até porto",
                     f"{empresa_info['distancia_km']:.2f} km",
                     f"{empresa_info['ref_mais_proxima_nome']}",
                 )
 
-        with col_m2:
-            if nm_fantasia_sel and porto_filtro_id:
-                col_dist = f"dist_{porto_filtro_id}_km"
-                if col_dist in df_dist.columns:
-                    dist_reta_porto = empresa_info[col_dist]
+            # Se temos ORS, calcula rota até todos os portos uma vez só
+            if ORS_API_KEY:
+                coord_dest = (empresa_info["latitude"], empresa_info["longitude"])
+                for ref in referencias:
+                    coord_ref = (ref["latitude"], ref["longitude"])
+                    rota = obter_rota_ors(coord_ref, coord_dest, api_key=ORS_API_KEY)
+                    if rota:
+                        rota["ref"] = ref
+                        rotas_empresa.append(rota)
+
+                if rotas_empresa:
+                    melhor_rota_viaria = min(rotas_empresa, key=lambda r: r["distance_km"])
+
+            with col_m2:
+                if melhor_rota_viaria:
+                    ref = melhor_rota_viaria["ref"]
                     st.metric(
-                        f"Distância reta até {porto_filtro_nome}",
-                        f"{dist_reta_porto:.2f} km",
-                        "Porto selecionado",
+                        "Distância viária mínima até porto",
+                        f"{melhor_rota_viaria['distance_km']:.2f} km",
+                        f"{ref['nome']}",
+                    )
+                else:
+                    st.metric(
+                        "Distância viária mínima até porto",
+                        "N/D",
+                        "Sem rota viária disponível",
                     )
 
-        # Mapa
+        else:
+            with col_m1:
+                st.info("Selecione uma empresa para ver os KPIs de distância.")
+
         st.markdown("### 🗺️ Mapa Interativo de Distâncias até Portos")
 
         with st.spinner("🗺️ Gerando mapa..."):
@@ -752,6 +778,7 @@ elif st.session_state.pagina == "Distâncias Caçador":
                 nm_fantasia_selecionado=nm_fantasia_sel,
                 ors_api_key=ORS_API_KEY,
                 porto_id_selecionado=porto_filtro_id,
+                rotas_precomputadas=rotas_empresa if nm_fantasia_sel else None,
             )
 
         st_folium(mapa, width=1200, height=650, returned_objects=[])
@@ -780,6 +807,7 @@ elif st.session_state.pagina == "Distâncias Caçador":
             "nm_cnae_fiscal_principal",
             "cluster_dbscan",
             "cluster_kmeans",
+            "ref_mais_proxima_id",
         ]
         cols_mostrar = [c for c in cols_mostrar if c in df_view.columns]
 
@@ -792,26 +820,46 @@ elif st.session_state.pagina == "Distâncias Caçador":
         # Análise de clusters
         st.markdown("### 🔍 Análise de Clusters (DBSCAN)")
 
-        if "cluster_dbscan" in df_view.columns:
-            clusters_validos = sorted([c for c in df_view["cluster_dbscan"].unique() if c != -1])
+        # Para clusters, se houver porto selecionado, usa apenas empresas
+        # cujo porto mais próximo é esse porto (ref_mais_proxima_id)
+        df_cluster_view = df_view.copy()
+        if porto_filtro_id:
+            df_cluster_view = df_cluster_view[
+                df_cluster_view["ref_mais_proxima_id"] == porto_filtro_id
+            ].copy()
+
+        if "cluster_dbscan" in df_cluster_view.columns:
+            clusters_validos = sorted(
+                [c for c in df_cluster_view["cluster_dbscan"].unique() if c != -1]
+            )
 
             if clusters_validos:
                 for c_id in clusters_validos:
-                    df_c = df_view[df_view["cluster_dbscan"] == c_id]
+                    df_c = df_cluster_view[df_cluster_view["cluster_dbscan"] == c_id]
                     dist_media = df_c["distancia_km"].mean()
                     muni_top = df_c["nm_mun"].value_counts().head(3)
 
                     with st.expander(f"🔵 Cluster {c_id} - {len(df_c)} empresas"):
                         col_c1, col_c2, col_c3 = st.columns(3)
                         col_c1.metric("Empresas", len(df_c))
-                        col_c2.metric("Distância Média (mín. até porto)", f"{dist_media:.1f} km")
+                        col_c2.metric(
+                            "Distância Média (mín. até porto)", f"{dist_media:.1f} km"
+                        )
                         col_c3.metric("Municípios", df_c["nm_mun"].nunique())
 
                         st.markdown("**Principais municípios:**")
                         for mun, count in muni_top.items():
                             st.write(f"- {mun}: {count} empresas")
             else:
-                st.info("ℹ️ Nenhum cluster denso identificado com os parâmetros atuais (raio 100 km)")
+                if porto_filtro_id:
+                    st.info(
+                        "ℹ️ Nenhum cluster denso identificado para o porto selecionado "
+                        "(raio 100 km)."
+                    )
+                else:
+                    st.info(
+                        "ℹ️ Nenhum cluster denso identificado com os parâmetros atuais (raio 100 km)"
+                    )
 
         # Download
         st.markdown("---")

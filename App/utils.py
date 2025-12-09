@@ -381,6 +381,7 @@ def criar_mapa_distancias_portos(
     nm_fantasia_selecionado: Optional[str] = None,
     ors_api_key: Optional[str] = None,
     porto_id_selecionado: Optional[str] = None,
+    rotas_precomputadas: Optional[List[Dict]] = None,
 ) -> folium.Map:
     """
     Mapa Folium com:
@@ -393,6 +394,14 @@ def criar_mapa_distancias_portos(
           * se porto_id_selecionado = X → rota apenas para o porto X (verde escuro)
 
     Mapa focado em Santa Catarina (zoom maior, ruas/cidades mais visíveis).
+
+    Se rotas_precomputadas for fornecido, deve ser uma lista de dicts:
+        {
+            "ref": <dict do porto>,
+            "distance_km": float,
+            "duration_min": float,
+            "geometry": [[lat, lon], ...]
+        }
     """
     print("\n🗺️  [LOG] Criando mapa multi-ref...")
     print(f"[LOG] ORS API KEY presente? {'SIM' if ors_api_key else 'NÃO'}")
@@ -407,6 +416,7 @@ def criar_mapa_distancias_portos(
     center_sc = (-27.0, -50.5)
     zoom_sc = 7
 
+    # OpenStreetMap deixa cidades e estradas mais visíveis
     m = folium.Map(location=center_sc, zoom_start=zoom_sc, tiles="OpenStreetMap")
 
     # Marcadores dos portos
@@ -417,7 +427,7 @@ def criar_mapa_distancias_portos(
             icon=folium.Icon(color="darkblue", icon="anchor", prefix="fa"),
         ).add_to(m)
 
-    # Colormap pela distância mínima
+    # Colormap pela distância mínima (pontos mais escuros)
     vmin = df_distancias["distancia_km"].min()
     vmax = df_distancias["distancia_km"].max()
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
@@ -435,7 +445,7 @@ def criar_mapa_distancias_portos(
 
     cluster = MarkerCluster(name="Empresas").add_to(m)
 
-    # Pontos das empresas
+    # Pontos das empresas – mais escuros e com borda mais forte
     for _, row in df_distancias.iterrows():
         cor_rgb = cmap(norm(row["distancia_km"]))[:3]
         cor_hex = mcolors.rgb2hex(cor_rgb)
@@ -445,9 +455,9 @@ def criar_mapa_distancias_portos(
         )
 
         radius = 5 if not is_selected else 10
-        weight = 1 if not is_selected else 4
-        opacity = 0.7 if not is_selected else 1.0
-        border_color = cor_hex if not is_selected else "#000000"
+        weight = 1 if not is_selected else 3  # borda mais marcante
+        opacity = 0.9 if not is_selected else 1.0  # mais opaco
+        border_color = "#333333" if not is_selected else "#000000"  # contorno mais escuro
 
         popup_html = (
             f"{row['nm_nome_fantasia']} - {row['nm_mun']}/{row['sg_uf']} "
@@ -475,9 +485,21 @@ def criar_mapa_distancias_portos(
         else:
             refs_para_rotas = referencias
 
-        rotas_ok = []
-        if ors_api_key and refs_para_rotas:
-            print("[LOG] Chamando ORS para referências selecionadas...")
+        rotas_ok: List[Dict] = []
+
+        # Se vieram rotas pré-computadas, reaproveita e filtra
+        if rotas_precomputadas is not None:
+            print("[LOG] Usando rotas pré-computadas no mapa...")
+            for rota in rotas_precomputadas:
+                ref = rota["ref"]
+                if refs_para_rotas and not any(r["id"] == ref["id"] for r in refs_para_rotas):
+                    continue
+                if rota.get("geometry"):
+                    rotas_ok.append(rota)
+
+        # Se não houver pré-computadas, tenta chamar ORS (fallback)
+        elif ors_api_key and refs_para_rotas:
+            print("[LOG] Chamando ORS para referências selecionadas (fallback)...")
             for ref in refs_para_rotas:
                 coord_ref = (ref["latitude"], ref["longitude"])
                 rota = obter_rota_ors(coord_ref, coord_dest, api_key=ors_api_key)
@@ -530,7 +552,7 @@ def criar_mapa_distancias_portos(
                     ).add_to(m)
         else:
             # Fallback: linha reta
-            print("[LOG] ⚠️ ORS indisponível. Desenhando linhas retas.")
+            print("[LOG] ⚠️ ORS indisponível ou sem rotas. Desenhando linhas retas.")
             linhas = []
             for ref in refs_para_rotas:
                 coord_ref = (ref["latitude"], ref["longitude"])
