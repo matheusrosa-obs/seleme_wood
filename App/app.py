@@ -553,7 +553,7 @@ elif st.session_state.pagina == "Distâncias Caçador":
     },
     {
         "id": "laguna",
-        "nome": "Porto de Languna",
+        "nome": "Porto de Laguna",
         "sg_uf": "SC",
         "latitude": -28.495529,
         "longitude": -48.771250,
