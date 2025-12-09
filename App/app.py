@@ -491,8 +491,7 @@ elif st.session_state.pagina == "Demanda 2":
                 "UF",
                 "Microrregião",
                 "Município",
-                "Endereço Completo",
-                "CNAE Principal"
+                "Endereço Completo"
             ]],
         height=400,
         hide_index=True
