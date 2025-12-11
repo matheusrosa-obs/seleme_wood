@@ -282,6 +282,7 @@ if st.session_state.pagina == "Demanda 1":
         empresas_filtradas[
             [
                 "Razão Social",
+                "Nome Fantasia",
                 "Porte da Empresa",
                 "Ano de Início",
                 "UF",
