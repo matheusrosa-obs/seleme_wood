@@ -1,16 +1,12 @@
 import streamlit as st
-import pandas as pd
 from pathlib import Path
+import pandas as pd
 
 from tabs.tab_ecom import render_tab_ecom
 from tabs.tab_portfolio import render_tab_portfolio
 
 
-# =========================
-# Helpers de caminho
-# =========================
 def _project_root() -> Path:
-    # app.py está em App/app.py -> parent.parent volta para a raiz do projeto
     return Path(__file__).resolve().parent.parent
 
 
@@ -22,14 +18,21 @@ def _resolve_path(path: str | Path) -> Path:
 @st.cache_data
 def load_data(file_path: str | Path) -> pd.DataFrame:
     resolved_path = _resolve_path(file_path)
-    if str(resolved_path).lower().endswith((".xlsx", ".xls")):
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Arquivo não encontrado: {resolved_path}")
+
+    suf = resolved_path.suffix.lower()
+    if suf in [".xlsx", ".xls"]:
         return pd.read_excel(resolved_path)
-    return pd.read_csv(resolved_path)
+
+    # CSV: tenta , e depois ;
+    try:
+        return pd.read_csv(resolved_path)
+    except Exception:
+        return pd.read_csv(resolved_path, sep=";")
 
 
-# =========================
 # Estilo e config
-# =========================
 try:
     with open(_resolve_path("App/style.css"), encoding="utf-8") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -43,7 +46,6 @@ st.set_page_config(
     page_icon=str(_resolve_path("App/logo_dark_mini.png")),
 )
 
-# Sidebar width (opcional)
 st.markdown(
     """
     <style>
@@ -57,41 +59,26 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-# =========================
-# Sidebar / Navegação
-# =========================
+# Navegação
 if "pagina" not in st.session_state:
     st.session_state.pagina = "Empresas por Canal"
 
 with st.sidebar:
-    st.markdown(
-        """
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 32vh;">
-        """,
-        unsafe_allow_html=True,
-    )
-
     if st.button("Empresas por Canal"):
         st.session_state.pagina = "Empresas por Canal"
-
     st.divider()
     try:
         st.image(str(_resolve_path("App/logo_dark.png")))
     except Exception:
         pass
-    st.markdown("</div>", unsafe_allow_html=True)
 
-
-# =========================
-# Página: Empresas por Canal
-# =========================
+# Página
 if st.session_state.pagina == "Empresas por Canal":
     st.header("Empresas por Canal: E-commerces & Portfólio")
 
     tab_ecom, tab_port = st.tabs(["E-commerces", "Portfólio"])
 
-    # Placeholder compartilhado entre tabs (mantido do seu script)
+    # Placeholder só para mapa na aba 2 (opcional)
     placeholder_df = pd.DataFrame(
         {
             "Município": ["Município A", "Município B", "Município C"],
@@ -103,9 +90,11 @@ if st.session_state.pagina == "Empresas por Canal":
         nu_longitude=[-48.6, -49.3, -51.2],
     )
 
+    # ✅ Aba 1 independente: NÃO passa placeholder_df (senão quebra as colunas)
     with tab_ecom:
-        render_tab_ecom(placeholder_df=placeholder_df)
+        render_tab_ecom()
 
+    # Aba 2 independente: usa companies/items
     with tab_port:
         render_tab_portfolio(
             load_data_fn=load_data,
