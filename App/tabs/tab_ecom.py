@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import unicodedata
 from urllib.parse import urljoin
 
 import streamlit as st
@@ -7,11 +8,15 @@ import plotly.express as px
 import pandas as pd
 
 
-CSV_PATH = r"C:\Projetos\Nova pasta\seleme_wood\App\lista_produtos_ecommerce_SC_all_sites_exploded.csv"
+CSV_PATH = r"App\lista_produtos_ecommerce_SC_all_sites_exploded (2).csv"
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "Dados").exists():
+            return parent
+    return here.parent.parent
 
 
 def _resolve_path(path: str | Path) -> Path:
@@ -34,7 +39,9 @@ def _safe_series(s: pd.Series) -> pd.Series:
 
 
 def _normalize_col_name(name: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", name.lower())
+    normalized = unicodedata.normalize("NFKD", name)
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]", "", normalized.lower())
 
 
 def _first_existing_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
@@ -87,55 +94,62 @@ def render_tab_ecom(
     with k3:
         st.metric("Preco m3 (mediana)", median_ppm3 if median_ppm3 is not None else "-")
 
-    if "nu_latitude" in df.columns and "nu_longitude" in df.columns and nm_col:
+    lat_col = _first_existing_column(df, ["nu_latitude", "latitude", "lat"])
+    lon_col = _first_existing_column(df, ["nu_longitude", "longitude", "lon", "nu_long"])
+    if lat_col and lon_col and nm_col:
         city_col = _first_existing_column(
-            df, ["cidade", "municipio", "municipio_nome", "cidade_nome", "nm_municipio"]
+            df, ["cidade", "municipio", "municipio_nome", "cidade_nome", "nm_municipio", "nm_mun"]
         )
+        df = df.copy()
+        df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
+        df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
         company_summary = (
             df.groupby(nm_col, dropna=False)
             .agg(
-                nu_latitude=("nu_latitude", "first"),
-                nu_longitude=("nu_longitude", "first"),
-                produtos=("name", lambda s: sorted({v for v in s if pd.notna(v)})),
-                produtos_count=("name", "count"),
+                nu_latitude=(lat_col, "first"),
+                nu_longitude=(lon_col, "first"),
             )
             .reset_index()
         )
 
-        if city_col:
-            city_lookup = df[[nm_col, city_col]].dropna().drop_duplicates(subset=[nm_col])
-            company_summary = company_summary.merge(city_lookup, on=nm_col, how="left")
-
-        company_summary["produtos_str"] = company_summary["produtos"].apply(
+        map_df = company_summary.dropna(subset=["nu_latitude", "nu_longitude"]).copy()
+        map_df = (
+            map_df.groupby(["nu_latitude", "nu_longitude"], dropna=False)[nm_col]
+            .apply(lambda s: sorted({v for v in s if pd.notna(v)}))
+            .reset_index()
+        )
+        map_df["empresas_count"] = map_df[nm_col].apply(len)
+        map_df["empresas_str"] = map_df[nm_col].apply(
             lambda vals: ", ".join(vals[:8]) + ("..." if len(vals) > 8 else "")
         )
-
-        map_df = company_summary.dropna(subset=["nu_latitude", "nu_longitude"]).copy()
 
         st.markdown("**Mapa**")
         fig_e = px.scatter_mapbox(
             map_df,
             lat="nu_latitude",
             lon="nu_longitude",
-            size="produtos_count",
-            color="produtos_count",
-            hover_name=nm_col,
+            size="empresas_count",
+            color="empresas_count",
             hover_data={
-                "produtos_str": True,
-                "produtos_count": True,
+                "empresas_str": True,
+                "empresas_count": True,
                 "nu_latitude": False,
                 "nu_longitude": False,
             },
-            center={"lat": -27.0, "lon": -50.0},
-            zoom=5,
             size_max=30,
         )
         fig_e.update_layout(
             mapbox_style="carto-darkmatter",
+            mapbox_center={"lat": -14.2, "lon": -51.9},
+            mapbox_zoom=3.2,
             margin=dict(l=0, r=0, t=0, b=0),
             height=380,
         )
-        st.plotly_chart(fig_e, use_container_width=True)
+        fig_e.update_traces(
+            marker=dict(opacity=0.85, sizemin=6),
+            hovertemplate="%{customdata[0]}<extra></extra>",
+        )
+        st.plotly_chart(fig_e, use_container_width=True, config={"scrollZoom": True})
     else:
         st.info("Mapa indisponivel: faltam latitude/longitude ou nm_empresa.")
 
@@ -144,7 +158,7 @@ def render_tab_ecom(
     filtered = df.copy()
 
     city_col = _first_existing_column(
-        df, ["cidade", "municipio", "municipio_nome", "cidade_nome", "nm_municipio"]
+        df, ["cidade", "municipio", "municipio_nome", "cidade_nome", "nm_municipio", "nm_mun"]
     )
     if city_col:
         city_options = sorted(_safe_series(df[city_col]).unique())
