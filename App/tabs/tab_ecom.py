@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 
 
-CSV_PATH = r"App\lista_produtos_ecommerce_SC_all_sites_exploded (3).csv"
+CSV_PATH = r"App/lista_produtos_ecommerce_SC_all_sites_exploded (3).csv"
 
 
 # =========================
