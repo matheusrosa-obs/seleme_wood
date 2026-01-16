@@ -127,7 +127,7 @@ def _card_empresa(nome: str, url: str, resumo: str, kpis: dict) -> None:
 
 def render_tab_portfolio(
     load_data_fn: Callable[[str], pd.DataFrame],
-    placeholder_df: pd.DataFrame,
+    placeholder_df: pd.DataFrame | None,
     companies_path: str,
     items_path: str,
 ) -> None:
@@ -161,6 +161,9 @@ def render_tab_portfolio(
     # =========================
     # Normalizações + split empresa/município
     # =========================
+    df_companies = df_companies.copy()
+    df_items = df_items.copy()
+
     df_companies["nome_empresa"] = _safe_str_series(df_companies["nome_empresa"]).str.strip()
     df_items["nome_empresa"] = _safe_str_series(df_items["nome_empresa"]).str.strip()
 
@@ -232,11 +235,15 @@ def render_tab_portfolio(
             placeholder="Selecione uma ou mais empresas",
         )
 
-        sel_municipios = st.multiselect(
-            "Município",
-            options=municipios_all,
-            placeholder="Opcional",
-        ) if municipios_all else []
+        sel_municipios = (
+            st.multiselect(
+                "Município",
+                options=municipios_all,
+                placeholder="Opcional",
+            )
+            if municipios_all
+            else []
+        )
 
     with r1c2:
         sel_cat_norm = st.multiselect("Categoria", options=cat_norm_all, placeholder="Opcional") if cat_norm_all else []
@@ -247,7 +254,7 @@ def render_tab_portfolio(
         sel_mat_grupo = st.multiselect("Material (grupo)", options=mat_grupo_all, placeholder="Opcional") if mat_grupo_all else []
 
     with r1c4:
-#        sel_status = st.multiselect("Status", options=status_all, placeholder="Opcional") if status_all else []
+        # sel_status = st.multiselect("Status", options=status_all, placeholder="Opcional") if status_all else []
         only_pinus = st.checkbox("Somente com indício de pinus", value=True)
         only_madeira = st.checkbox("Somente trabalha com madeira", value=False)
 
@@ -278,8 +285,8 @@ def render_tab_portfolio(
     if sel_municipios and "municipio" in comp.columns:
         comp = comp[comp["municipio"].astype(str).isin(sel_municipios)]
 
-#    if sel_status and "status_execucao" in comp.columns:
-#        comp = comp[comp["status_execucao"].astype(str).isin(sel_status)]
+    # if sel_status and "status_execucao" in comp.columns:
+    #     comp = comp[comp["status_execucao"].astype(str).isin(sel_status)]
 
     if range_total and "qtde_itens_total" in comp.columns:
         comp = comp[comp["qtde_itens_total"].between(range_total[0], range_total[1])]
@@ -306,7 +313,7 @@ def render_tab_portfolio(
         [
             bool(sel_empresas),
             bool(sel_municipios),
-#            bool(sel_status),
+            # bool(sel_status),
             bool(range_total),
             bool(only_pinus),
             bool(only_madeira),
@@ -366,54 +373,62 @@ def render_tab_portfolio(
     st.divider()
 
     # =========================
-    # EMPRESAS: 2 colunas:
-    # - ESQUERDA: container rolável (altura 800) com APENAS 4 cards (2x2)
-    # - DIREITA: detalhe da empresa (mantido)
+    # EMPRESAS (cards) — 1 card por empresa (sem duplicar)
     # =========================
     st.markdown("#### Empresas")
 
     _inject_cards_css_once()
 
-    comp_view = comp.sort_values("qtde_itens_total", ascending=False) if "qtde_itens_total" in comp.columns else comp.copy()
+    def _first_non_empty(series: pd.Series) -> str:
+        s = _safe_str_series(series).str.strip()
+        s = s[s != ""]
+        return s.iloc[0] if len(s) else ""
 
-#    left, right = st.columns([1.15, 1.0], gap="large")
+    # Aggregation: 1 linha por nome_empresa
+    agg_dict: dict = {}
+    for c in ["empresa_nome", "municipio", "url_site", "resumo_materiais", "status_execucao", "nome_empresa"]:
+        if c in comp.columns:
+            agg_dict[c] = _first_non_empty
 
-#    with left:
+    for c in ["qtde_itens_total", "qtde_itens_madeira", "qtde_itens_menciona_pinus"]:
+        if c in comp.columns:
+            agg_dict[c] = "max"
+
+    if "nome_empresa" in comp.columns:
+        comp_view = (
+            comp.groupby("nome_empresa", dropna=False, as_index=False)
+            .agg(agg_dict)
+        )
+    else:
+        comp_view = comp.copy()
+
+    if "qtde_itens_total" in comp_view.columns:
+        comp_view = comp_view.sort_values("qtde_itens_total", ascending=False)
+
     with st.container(height=550, border=False):
-#            st.caption("Cards (2x2). Role dentro do container para ver outras empresas.")
-#            st.markdown("<div class='cards-scroll-200'>", unsafe_allow_html=True)
+        empresas_cards_df = comp_view.copy()
 
-            # IMPORTANTÍSSIMO: aqui fica estritamente 2x2 (máx 4 cards por “viewport”)
-            # O container tem scroll, então você consegue ver as próximas 4, etc.
-            # A lógica é sempre em páginas de 4.
-            empresas_cards_df = comp_view.copy()
+        for start in range(0, len(empresas_cards_df), 4):
+            page = empresas_cards_df.iloc[start : start + 4]
 
-            # Para performance, você pode limitar se quiser:
-            # empresas_cards_df = empresas_cards_df.head(300)
+            c1, c2 = st.columns(2, gap="large")
+            for i, (_, rr) in enumerate(page.iterrows()):
+                target = c1 if i % 2 == 0 else c2
+                with target:
+                    nome = str(rr.get("empresa_nome", "") or rr.get("nome_empresa", "") or "")
+                    municipio = str(rr.get("municipio", "") or "")
+                    nome_fmt = f"{nome} — {municipio}" if municipio else nome
 
-            for start in range(0, len(empresas_cards_df), 4):
-                page = empresas_cards_df.iloc[start : start + 4]
-
-                c1, c2 = st.columns(2, gap="large")
-                for i, (_, rr) in enumerate(page.iterrows()):
-                    target = c1 if i % 2 == 0 else c2 
-                    with target:
-                        nome = str(rr.get("empresa_nome", "") or rr.get("nome_empresa", "") or "")
-                        municipio = str(rr.get("municipio", "") or "")
-                        nome_fmt = f"{nome} — {municipio}" if municipio else nome
-
-                        _card_empresa(
-                            nome=nome_fmt,
-                            url=str(rr.get("url_site", "") or ""),
-                            resumo=str(rr.get("resumo_materiais", "") or ""),
-                            kpis={
-                                "Total": int(rr.get("qtde_itens_total", 0) or 0),
-                                "Madeira": int(rr.get("qtde_itens_madeira", 0) or 0),
-                                "Pinus": int(rr.get("qtde_itens_menciona_pinus", 0) or 0),
-                            },
-                        )
-
-            st.markdown("</div>", unsafe_allow_html=True)
+                    _card_empresa(
+                        nome=nome_fmt,
+                        url=str(rr.get("url_site", "") or ""),
+                        resumo=str(rr.get("resumo_materiais", "") or ""),
+                        kpis={
+                            "Total": int(rr.get("qtde_itens_total", 0) or 0),
+                            "Madeira": int(rr.get("qtde_itens_madeira", 0) or 0),
+                            "Pinus": int(rr.get("qtde_itens_menciona_pinus", 0) or 0),
+                        },
+                    )
 
     st.divider()
 
@@ -425,19 +440,11 @@ def render_tab_portfolio(
     cols_items_hard = [
         "empresa_nome",
         "municipio",
-#        "nome_empresa",  # chave original
-#        "url_site",
         "nome_produto",
         "categoria_produto",
-#        "categoria_produto_norm",
         "categoria_produto_grupo",
         "material",
-#        "material_norm",
         "material_grupo",
-#        "relacionado_madeira",
-#        "menciona_pinus",
-#        "fonte_indicio",
-#        "data_coleta",
     ]
     cols_items_hard = [c for c in cols_items_hard if c in it.columns]
 
@@ -453,7 +460,7 @@ def render_tab_portfolio(
         height=560,
     )
 
-        # =========================
+    # =========================
     # MAPA (REAL): empresas por município
     # =========================
     st.divider()
@@ -517,21 +524,21 @@ def render_tab_portfolio(
             lat="lat",
             lon="lon",
             size="empresas",
-            hover_name="label",                 # título do hover (Município - UF)
+            hover_name="label",
             hover_data={
-                "empresas": True,               
-                "lat": False,                   
-                "lon": False,                   
-                "mun": False,                   
-                "ufx": False,                   
+                "empresas": True,   # só isso no hover além do título
+                "lat": False,
+                "lon": False,
+                "mun": False,
+                "ufx": False,
             },
             center=center,
             zoom=6,
             size_max=45,
-         )
+        )
 
         fig.update_layout(
-            mapbox_style="carto-darkmatter",  # 🔥 estilo original
+            mapbox_style="carto-darkmatter",
             margin=dict(l=0, r=0, t=0, b=0),
             height=520,
         )
