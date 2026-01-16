@@ -2,7 +2,6 @@ from pathlib import Path
 import re
 import unicodedata
 from urllib.parse import urljoin
-from typing import Callable
 
 import streamlit as st
 import pandas as pd
@@ -174,10 +173,8 @@ def render_tab_ecom(
 
     if site_col and site_col in df.columns:
         df[site_col] = _safe_series(df[site_col]).str.strip()
-
     if city_col and city_col in df.columns:
         df[city_col] = _safe_series(df[city_col]).str.strip()
-
     if uf_col and uf_col in df.columns:
         df[uf_col] = _safe_series(df[uf_col]).str.strip()
 
@@ -186,31 +183,45 @@ def render_tab_ecom(
         df[ppm3_col] = _to_float_series(df[ppm3_col])
 
     # =========================
-    # Opções para filtros
+    # Opções estáveis
     # =========================
-    empresas_all = sorted(df[nm_col].dropna().unique().tolist())
-    cidades_all = sorted(_safe_series(df[city_col]).dropna().unique().tolist()) if city_col else []
     status_all = sorted(_safe_series(df[status_col]).dropna().unique().tolist()) if status_col else []
 
     # =========================
-    # Filtros globais (topo)
+    # Filtros globais (topo) — empresa respeita Status (e Município)
     # =========================
     st.markdown("#### Filtros globais")
     r1c1, r1c2, r1c3, r1c4 = st.columns([2.2, 2.2, 2.2, 1.6])
 
-    with r1c1:
-        sel_empresas = st.multiselect("Empresa", options=empresas_all, placeholder="Selecione uma ou mais")
-
-    with r1c2:
-        sel_cidades = st.multiselect("Município", options=cidades_all, placeholder="Opcional") if cidades_all else []
-
+    # 1) Status primeiro
     with r1c3:
         sel_status = st.multiselect("Status", options=status_all, placeholder="Opcional") if status_all else []
 
+    # 2) filtros rápidos
     with r1c4:
-        # filtros “rápidos”
         only_found = st.checkbox("Somente FOUND", value=False)
         has_ppm3 = st.checkbox("Somente com preço/m3", value=False)
+
+    # 3) df auxiliar para opções dependentes
+    df_opts = df.copy()
+    if status_col and sel_status:
+        df_opts = df_opts[_safe_series(df_opts[status_col]).isin(sel_status)]
+    if only_found and status_col:
+        df_opts = df_opts[_safe_series(df_opts[status_col]).str.upper().eq("FOUND")]
+
+    # 4) Município depende de status/only_found
+    cidades_all = sorted(_safe_series(df_opts[city_col]).dropna().unique().tolist()) if city_col else []
+    with r1c2:
+        sel_cidades = st.multiselect("Município", options=cidades_all, placeholder="Opcional") if cidades_all else []
+
+    # 5) Empresa depende de status/only_found e também de município
+    df_opts2 = df_opts.copy()
+    if city_col and sel_cidades:
+        df_opts2 = df_opts2[_safe_series(df_opts2[city_col]).isin(sel_cidades)]
+    empresas_all = sorted(_safe_series(df_opts2[nm_col]).dropna().unique().tolist())
+
+    with r1c1:
+        sel_empresas = st.multiselect("Empresa", options=empresas_all, placeholder="Selecione uma ou mais")
 
     r2c1, r2c2, r2c3 = st.columns([2.0, 2.0, 2.0])
     with r2c1:
@@ -228,7 +239,6 @@ def render_tab_ecom(
                 range_ppm3 = st.slider("Faixa preço/m3", float(vmin), float(vmax), (float(vmin), float(vmax)))
 
     with r2c3:
-        # placeholder para futuro
         st.caption("")
 
     st.divider()
@@ -238,17 +248,17 @@ def render_tab_ecom(
     # =========================
     filtered = df.copy()
 
-    if sel_empresas:
-        filtered = filtered[_safe_series(filtered[nm_col]).isin(sel_empresas)]
+    # Status/only_found primeiro (para coerência total)
+    if status_col and sel_status:
+        filtered = filtered[_safe_series(filtered[status_col]).isin(sel_status)]
+    if only_found and status_col:
+        filtered = filtered[_safe_series(filtered[status_col]).str.upper().eq("FOUND")]
 
     if city_col and sel_cidades:
         filtered = filtered[_safe_series(filtered[city_col]).isin(sel_cidades)]
 
-    if status_col and sel_status:
-        filtered = filtered[_safe_series(filtered[status_col]).isin(sel_status)]
-
-    if only_found and status_col:
-        filtered = filtered[_safe_series(filtered[status_col]).str.upper().eq("FOUND")]
+    if sel_empresas:
+        filtered = filtered[_safe_series(filtered[nm_col]).isin(sel_empresas)]
 
     if has_ppm3 and ppm3_col:
         filtered = filtered[filtered[ppm3_col].notna()]
@@ -277,7 +287,7 @@ def render_tab_ecom(
     # =========================
     # EMPRESAS: 2 colunas
     # - ESQUERDA: cards (2x2 por viewport) com scroll
-    # - DIREITA: detalhe da empresa (mantido)
+    # - DIREITA: detalhe da empresa
     # =========================
     st.markdown("#### Empresas")
 
@@ -296,7 +306,7 @@ def render_tab_ecom(
         .reset_index()
     )
 
-    # ordenação
+    # ordenação por volume
     if "produtos" in comp_view.columns:
         comp_view = comp_view.sort_values("produtos", ascending=False)
 
@@ -317,13 +327,12 @@ def render_tab_ecom(
                         empresa = str(rr.get(nm_col, "") or "")
                         mun = str(rr.get("municipio", "") or "")
                         uf = str(rr.get("uf", "") or "")
-                        label_loc = f"{mun} - {uf}" if mun or uf else ""
+                        label_loc = f"{mun} - {uf}".strip(" -") if (mun or uf) else ""
                         nome_fmt = f"{empresa} — {label_loc}" if label_loc else empresa
 
                         url = str(rr.get("website_url", "") or "")
                         resumo = str(rr.get("msg", "") or "")
 
-                        # KPIs da empresa (card)
                         produtos = int(rr.get("produtos", 0) or 0)
                         stt = str(rr.get("status", "") or "")
                         ppm3_med = rr.get("ppm3_mediana", None)
@@ -370,10 +379,10 @@ def render_tab_ecom(
             st.markdown("**Resumo**")
             st.markdown(_pretty_multiline(msg))
 
-            # KPI extra
             st.divider()
             cA, cB = st.columns(2)
             cA.metric("Produtos (filtrados)", int(filtered[_safe_series(filtered[nm_col]) == empresa_sel].shape[0]))
+
             if ppm3_col:
                 sub = filtered[_safe_series(filtered[nm_col]) == empresa_sel]
                 if sub[ppm3_col].notna().any():
