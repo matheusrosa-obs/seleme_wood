@@ -227,7 +227,7 @@ def render_tab_portfolio(
     r1c1, r1c2, r1c3, r1c4 = st.columns([2.2, 2.2, 2.2, 1.6])
     with r1c1:
         sel_empresas = st.multiselect(
-            "Empresa",
+            "Empresa (chave original)",
             options=empresas_all,
             placeholder="Selecione uma ou mais empresas",
         )
@@ -239,15 +239,15 @@ def render_tab_portfolio(
         ) if municipios_all else []
 
     with r1c2:
-        sel_cat_norm = st.multiselect("Categoria", options=cat_norm_all, placeholder="Opcional") if cat_norm_all else []
+        sel_cat_norm = st.multiselect("Categoria (norm)", options=cat_norm_all, placeholder="Opcional") if cat_norm_all else []
         sel_cat_grupo = st.multiselect("Categoria (grupo)", options=cat_grupo_all, placeholder="Opcional") if cat_grupo_all else []
 
     with r1c3:
-        sel_mat_norm = st.multiselect("Material", options=mat_norm_all, placeholder="Opcional") if mat_norm_all else []
+        sel_mat_norm = st.multiselect("Material (norm)", options=mat_norm_all, placeholder="Opcional") if mat_norm_all else []
         sel_mat_grupo = st.multiselect("Material (grupo)", options=mat_grupo_all, placeholder="Opcional") if mat_grupo_all else []
 
     with r1c4:
-#        sel_status = st.multiselect("Status", options=status_all, placeholder="Opcional") if status_all else []
+        sel_status = st.multiselect("Status", options=status_all, placeholder="Opcional") if status_all else []
         only_pinus = st.checkbox("Somente com indício de pinus", value=True)
         only_madeira = st.checkbox("Somente trabalha com madeira", value=False)
 
@@ -278,8 +278,8 @@ def render_tab_portfolio(
     if sel_municipios and "municipio" in comp.columns:
         comp = comp[comp["municipio"].astype(str).isin(sel_municipios)]
 
-#    if sel_status and "status_execucao" in comp.columns:
-#        comp = comp[comp["status_execucao"].astype(str).isin(sel_status)]
+    if sel_status and "status_execucao" in comp.columns:
+        comp = comp[comp["status_execucao"].astype(str).isin(sel_status)]
 
     if range_total and "qtde_itens_total" in comp.columns:
         comp = comp[comp["qtde_itens_total"].between(range_total[0], range_total[1])]
@@ -306,7 +306,7 @@ def render_tab_portfolio(
         [
             bool(sel_empresas),
             bool(sel_municipios),
-#            bool(sel_status),
+            bool(sel_status),
             bool(range_total),
             bool(only_pinus),
             bool(only_madeira),
@@ -376,10 +376,10 @@ def render_tab_portfolio(
 
     comp_view = comp.sort_values("qtde_itens_total", ascending=False) if "qtde_itens_total" in comp.columns else comp.copy()
 
-#    left, right = st.columns([1.15, 1.0], gap="large")
+    left, right = st.columns([1.15, 1.0], gap="large")
 
-#    with left:
-    with st.container(height=550, border=False):
+    with left:
+        with st.container(height=550, border=False):
 #            st.caption("Cards (2x2). Role dentro do container para ver outras empresas.")
 #            st.markdown("<div class='cards-scroll-200'>", unsafe_allow_html=True)
 
@@ -396,7 +396,7 @@ def render_tab_portfolio(
 
                 c1, c2 = st.columns(2, gap="large")
                 for i, (_, rr) in enumerate(page.iterrows()):
-                    target = c1 if i % 2 == 0 else c2 
+                    target = c1 if i % 2 == 0 else c2
                     with target:
                         nome = str(rr.get("empresa_nome", "") or rr.get("nome_empresa", "") or "")
                         municipio = str(rr.get("municipio", "") or "")
@@ -414,6 +414,54 @@ def render_tab_portfolio(
                         )
 
             st.markdown("</div>", unsafe_allow_html=True)
+
+    with right:
+        st.caption("Detalhe da empresa (resumo_materiais)")
+
+        empresas_opts = comp_view["nome_empresa"].dropna().unique().tolist()
+        default_opt = empresas_opts[0] if empresas_opts else None
+
+        empresa_sel = (
+            st.selectbox(
+                "Escolha uma empresa",
+                options=empresas_opts,
+                index=0 if default_opt else 0,
+            )
+            if empresas_opts
+            else None
+        )
+
+        if not empresa_sel:
+            st.info("Nenhuma empresa disponível com os filtros atuais.")
+        else:
+            row = comp_view[comp_view["nome_empresa"] == empresa_sel].head(1)
+            if row.empty:
+                st.info("Empresa não encontrada (cheque filtros).")
+            else:
+                r = row.iloc[0]
+                url = str(r.get("url_site", "") or "")
+                resumo = str(r.get("resumo_materiais", "") or "")
+
+                empresa_nome = str(r.get("empresa_nome", "") or "")
+                municipio = str(r.get("municipio", "") or "")
+
+                st.markdown(f"##### {empresa_nome or empresa_sel}")
+                if municipio:
+                    st.caption(f"📍 {municipio}")
+
+                if url:
+                    st.markdown(f"[Abrir site]({url})")
+                else:
+                    st.caption("Sem url_site.")
+
+                cA, cB, cC = st.columns(3)
+                cA.metric("Itens total", int(r.get("qtde_itens_total", 0) or 0))
+                cB.metric("Itens madeira", int(r.get("qtde_itens_madeira", 0) or 0))
+                cC.metric("Menciona pinus", int(r.get("qtde_itens_menciona_pinus", 0) or 0))
+
+                st.divider()
+                st.markdown("**Resumo de materiais**")
+                st.markdown(_pretty_multiline(resumo))
 
     st.divider()
 
@@ -453,87 +501,30 @@ def render_tab_portfolio(
         height=560,
     )
 
-        # =========================
-    # MAPA (REAL): empresas por município
     # =========================
-    st.divider()
-    st.markdown("#### empresas por município")
+    # Mapa placeholder (de volta)
+    # =========================
+    if placeholder_df is not None and not placeholder_df.empty:
+        st.divider()
+        st.markdown("#### Mapa (placeholder)")
 
-    src = df_companies.copy()
-
-    # Município / UF
-    if "nm_mun" in src.columns:
-        src["mun"] = _safe_str_series(src["nm_mun"]).str.strip()
-    else:
-        src["mun"] = ""
-
-    if "nm_uf" in src.columns:
-        src["ufx"] = _safe_str_series(src["nm_uf"]).str.strip()
-    else:
-        src["ufx"] = ""
-
-    # Empresa única (evita duplicação)
-    if "nome_empresa_limpa" in src.columns:
-        src["empresa_key"] = _safe_str_series(src["nome_empresa_limpa"]).str.strip()
-    else:
-        src["empresa_key"] = _safe_str_series(src["nome_empresa"]).str.strip()
-
-    # Latitude / Longitude (robusto para string com vírgula)
-    src["lat"] = pd.to_numeric(
-        _safe_str_series(src.get("nu_latitude")).str.replace(",", ".", regex=False),
-        errors="coerce",
-    )
-    src["lon"] = pd.to_numeric(
-        _safe_str_series(src.get("nu_longitude")).str.replace(",", ".", regex=False),
-        errors="coerce",
-    )
-
-    # Remove linhas sem coordenadas
-    src = src.dropna(subset=["lat", "lon"])
-
-    if src.empty:
-        st.info("Não há dados geográficos válidos para exibir o mapa.")
-    else:
-        # Agregação por município
-        bubbles = (
-            src.groupby(["mun", "ufx"], dropna=False)
-            .agg(
-                empresas=("empresa_key", "nunique"),
-                lat=("lat", "median"),
-                lon=("lon", "median"),
+        if all(c in placeholder_df.columns for c in ["nu_latitude", "nu_longitude"]):
+            fig_p = px.scatter_mapbox(
+                placeholder_df,
+                lat="nu_latitude",
+                lon="nu_longitude",
+                size="Quantidade" if "Quantidade" in placeholder_df.columns else None,
+                color="UF" if "UF" in placeholder_df.columns else None,
+                hover_name="Município" if "Município" in placeholder_df.columns else None,
+                center={"lat": -27.0, "lon": -50.0},
+                zoom=5,
+                size_max=30,
             )
-            .reset_index()
-        )
-
-        bubbles["label"] = bubbles["mun"] + " - " + bubbles["ufx"]
-
-        center = {
-            "lat": float(bubbles["lat"].median()),
-            "lon": float(bubbles["lon"].median()),
-        }
-
-        fig = px.scatter_mapbox(
-            bubbles,
-            lat="lat",
-            lon="lon",
-            size="empresas",
-            hover_name="label",                 # título do hover (Município - UF)
-            hover_data={
-                "empresas": True,               
-                "lat": False,                   
-                "lon": False,                   
-                "mun": False,                   
-                "ufx": False,                   
-            },
-            center=center,
-            zoom=6,
-            size_max=45,
-         )
-
-        fig.update_layout(
-            mapbox_style="carto-darkmatter",  # 🔥 estilo original
-            margin=dict(l=0, r=0, t=0, b=0),
-            height=520,
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
+            fig_p.update_layout(
+                mapbox_style="carto-darkmatter",
+                margin=dict(l=0, r=0, t=0, b=0),
+                height=500,
+            )
+            st.plotly_chart(fig_p, use_container_width=True)
+        else:
+            st.info("placeholder_df não possui nu_latitude/nu_longitude para exibir o mapa.")

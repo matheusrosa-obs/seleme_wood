@@ -98,7 +98,7 @@ if st.session_state.pagina == "Empresas por Canal":
     with tab_port:
         render_tab_portfolio(
             load_data_fn=load_data,
-            placeholder_df=placeholder_df,
-            companies_path="App/companies.csv",
+            placeholder_df=None,
+            companies_path="App/companies_lat_long.csv",
             items_path="App/items.csv",
         )

@@ -8,7 +8,7 @@ import plotly.express as px
 import pandas as pd
 
 
-CSV_PATH = r"App\lista_produtos_ecommerce_SC_all_sites_exploded (2).csv"
+CSV_PATH = r"App\lista_produtos_ecommerce_SC_all_sites_exploded (3).csv"
 
 
 def _project_root() -> Path:
