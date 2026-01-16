@@ -227,16 +227,16 @@ def render_tab_ecom(
     with r2c1:
         busca_produto = st.text_input("Busca produto (nome)", placeholder="ex: painel pinus").strip()
 
-    with r2c2:
-        # faixa de preço/m3
-        range_ppm3 = None
-        if ppm3_col and df[ppm3_col].notna().any():
-            vmin = float(df[ppm3_col].min())
-            vmax = float(df[ppm3_col].max())
-            if vmin == vmax:
-                st.caption("Preço/m3 sem variação no dataset.")
-            else:
-                range_ppm3 = st.slider("Faixa preço/m3", float(vmin), float(vmax), (float(vmin), float(vmax)))
+#    with r2c2:
+#        # faixa de preço/m3
+#        range_ppm3 = None
+#        if ppm3_col and df[ppm3_col].notna().any():
+#            vmin = float(df[ppm3_col].min())
+#            vmax = float(df[ppm3_col].max())
+#            if vmin == vmax:
+#                st.caption("Preço/m3 sem variação no dataset.")
+#            else:
+#                range_ppm3 = st.slider("Faixa preço/m3", float(vmin), float(vmax), (float(vmin), float(vmax)))
 
     with r2c3:
         st.caption("")
@@ -263,8 +263,8 @@ def render_tab_ecom(
     if has_ppm3 and ppm3_col:
         filtered = filtered[filtered[ppm3_col].notna()]
 
-    if range_ppm3 and ppm3_col:
-        filtered = filtered[filtered[ppm3_col].between(range_ppm3[0], range_ppm3[1])]
+#    if range_ppm3 and ppm3_col:
+#        filtered = filtered[filtered[ppm3_col].between(range_ppm3[0], range_ppm3[1])]
 
     if busca_produto and prod_name_col and prod_name_col in filtered.columns:
         filtered = filtered[_safe_series(filtered[prod_name_col]).str.contains(busca_produto, case=False, na=False)]
@@ -275,12 +275,12 @@ def render_tab_ecom(
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Empresas (filtradas)", int(filtered[nm_col].nunique()))
     k2.metric("Produtos (filtrados)", int(len(filtered)))
-    if ppm3_col and filtered[ppm3_col].notna().any():
-        k3.metric("Preço/m3 (mediana)", round(float(filtered[ppm3_col].median()), 2))
-        k4.metric("Preço/m3 (mín)", round(float(filtered[ppm3_col].min()), 2))
-    else:
-        k3.metric("Preço/m3 (mediana)", "-")
-        k4.metric("Preço/m3 (mín)", "-")
+#    if ppm3_col and filtered[ppm3_col].notna().any():
+#        k3.metric("Preço/m3 (mediana)", round(float(filtered[ppm3_col].median()), 2))
+#        k4.metric("Preço/m3 (mín)", round(float(filtered[ppm3_col].min()), 2))
+#    else:
+#        k3.metric("Preço/m3 (mediana)", "-")
+#        k4.metric("Preço/m3 (mín)", "-")
 
     st.divider()
 
