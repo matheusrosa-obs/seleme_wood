@@ -9,6 +9,14 @@ from matplotlib import cm
 import matplotlib.colors as mcolors
 from typing import Dict, Tuple, Optional, List
 import requests
+import traceback
+#from __future__ import annotations
+
+from dataclasses import dataclass
+from urllib.parse import urlparse
+
+import requests
+import streamlit as st
 
 
 class CalculadoraDistanciasMultiRef:
@@ -598,3 +606,220 @@ def criar_mapa_distancias_portos(
     print("   ✅ [LOG] Mapa multi-ref criado com sucesso")
 
     return m
+
+
+#### PREVIEW DOS PRODUTOS
+
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Connection": "keep-alive",
+}
+
+
+@dataclass
+class FrameCheckResult:
+    final_url: str
+    decision: str  # "ALLOW" | "BLOCK" | "UNKNOWN"
+    reason: str
+    x_frame_options: str | None
+    csp_frame_ancestors: str | None
+
+
+def _get_origin(url: str) -> str:
+    p = urlparse(url)
+    return f"{p.scheme}://{p.netloc}"
+
+
+def _extract_frame_ancestors(csp: str | None) -> str | None:
+    if not csp:
+        return None
+    parts = [p.strip() for p in csp.split(";")]
+    for part in parts:
+        if part.lower().startswith("frame-ancestors"):
+            return part[len("frame-ancestors") :].strip() or ""
+    return None
+
+
+def _token_allows_embedding(token: str, app_origin: str, page_origin: str) -> bool:
+    token = (token or "").strip()
+
+    if token in ("'none'", "none"):
+        return False
+    if token in ("'self'", "self"):
+        return app_origin == page_origin
+    if token == "*":
+        return True
+
+    # scheme only (ex: https:)
+    if token.endswith(":") and token[:-1] in ("http", "https"):
+        return app_origin.startswith(token)
+
+    # origin/host
+    try:
+        if "://" not in token:
+            return urlparse(app_origin).netloc == token
+
+        tok = urlparse(token)
+        app = urlparse(app_origin)
+
+        if tok.hostname and tok.hostname.startswith("*."):
+            suffix = tok.hostname[1:]  # ".example.com"
+            return (app.hostname or "").endswith(suffix) and (tok.scheme == app.scheme)
+
+        return (tok.scheme == app.scheme) and (tok.netloc == app.netloc)
+    except Exception:
+        return False
+
+
+def _csp_allows_embedding(frame_ancestors: str, app_origin: str, page_origin: str) -> tuple[bool, str]:
+    tokens = [t for t in (frame_ancestors or "").split() if t.strip()]
+    if not tokens:
+        return False, "CSP frame-ancestors vazio (tratado como bloqueio)."
+
+    if "'none'" in tokens or "none" in tokens:
+        return False, "CSP frame-ancestors 'none' (bloqueia iframes)."
+
+    for t in tokens:
+        if _token_allows_embedding(t, app_origin=app_origin, page_origin=page_origin):
+            return True, f"CSP frame-ancestors permite: {t}"
+
+    return False, "CSP frame-ancestors não inclui o origin do app."
+
+
+def infer_app_origin(default_local: str = "http://localhost:8501") -> str:
+    """
+    Melhor esforço:
+    - Se existir APP_ORIGIN em st.secrets, usa ele.
+    - Senão, usa localhost (bom pra dev).
+    """
+    try:
+        v = st.secrets.get("APP_ORIGIN", None)
+        if v:
+            return str(v).strip()
+    except Exception:
+        pass
+    return default_local
+
+
+@st.cache_data(ttl=60 * 60, show_spinner=False)
+def check_iframe_allowed(url: str, app_origin: str, timeout_s: int = 10) -> FrameCheckResult:
+    session = requests.Session()
+
+    def _req(method: str):
+        return session.request(
+            method=method,
+            url=url,
+            headers=DEFAULT_HEADERS,
+            timeout=timeout_s,
+            allow_redirects=True,
+        )
+
+    resp = None
+    # 1) HEAD
+    try:
+        resp = _req("HEAD")
+        if resp.status_code >= 400 or not resp.headers:
+            raise RuntimeError(f"HEAD status {resp.status_code}")
+    except Exception:
+        # 2) GET fallback
+        try:
+            resp = session.get(
+                url,
+                headers=DEFAULT_HEADERS,
+                timeout=timeout_s,
+                allow_redirects=True,
+                stream=True,
+            )
+        except Exception as e:
+            return FrameCheckResult(
+                final_url=url,
+                decision="UNKNOWN",
+                reason=f"Falha ao acessar URL para checar headers: {e}",
+                x_frame_options=None,
+                csp_frame_ancestors=None,
+            )
+
+    final_url = resp.url or url
+    page_origin = _get_origin(final_url)
+
+    xfo = resp.headers.get("X-Frame-Options") or resp.headers.get("x-frame-options")
+    csp = resp.headers.get("Content-Security-Policy") or resp.headers.get("content-security-policy")
+
+    xfo_norm = xfo.strip().lower() if isinstance(xfo, str) else None
+
+    # X-Frame-Options
+    if xfo_norm:
+        if "deny" in xfo_norm:
+            return FrameCheckResult(final_url, "BLOCK", "X-Frame-Options: DENY", xfo, None)
+        if "sameorigin" in xfo_norm and app_origin != page_origin:
+            return FrameCheckResult(final_url, "BLOCK", "X-Frame-Options: SAMEORIGIN", xfo, None)
+
+    # CSP frame-ancestors
+    fa = _extract_frame_ancestors(csp if isinstance(csp, str) else None)
+    if fa is not None:
+        allowed, why = _csp_allows_embedding(fa, app_origin=app_origin, page_origin=page_origin)
+        if not allowed:
+            return FrameCheckResult(final_url, "BLOCK", why, xfo, fa)
+
+    # Sem bloqueio explícito encontrado
+    if xfo_norm or fa is not None or csp:
+        return FrameCheckResult(final_url, "ALLOW", "Sem bloqueio explícito por XFO/CSP.", xfo, fa)
+
+    return FrameCheckResult(final_url, "UNKNOWN", "Sem XFO/CSP nos headers (não dá pra garantir).", xfo, fa)
+
+
+@st.cache_data(ttl=60 * 60 * 6, show_spinner="Gerando preview...") 
+def get_page_screenshot_bytes(url: str, timeout_ms: int = 20000) -> Optional[bytes]:
+    """
+    Tira screenshot da página via Playwright.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        st.error("Playwright não instalado. Execute: pip install playwright && playwright install chromium")
+        return None
+
+    try:
+        with sync_playwright() as p:
+            # Lançando o browser
+            browser = p.chromium.launch(
+                headless=True, 
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+            )
+            
+            # Contexto com User Agent de um navegador real para evitar bloqueios simples
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+            )
+            
+            page = context.new_page()
+            
+            # Tenta carregar a página
+            # Mudamos de 'networkidle' para 'domcontentloaded' ou 'load' porque 
+            # sites com muitos rastreadores nunca chegam em 'networkidle' e dão timeout.
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                # Espera um tempinho extra para renderizar imagens dinâmicas
+                page.wait_for_timeout(2000) 
+            except Exception as e:
+                print(f"Aviso no carregamento: {e}")
+                # Se der timeout no load, tentamos tirar o print assim mesmo do que carregou
+
+            png_bytes = page.screenshot(full_page=False, type="png")
+            
+            context.close()
+            browser.close()
+            return png_bytes
+            
+    except Exception as e:
+        # Isso ajuda a debugar no console do Streamlit
+        print(f"Erro ao capturar screenshot de {url}:")
+        traceback.print_exc()
+        return None

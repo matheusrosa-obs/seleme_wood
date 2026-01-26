@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 import re
 import unicodedata
@@ -5,6 +7,16 @@ from urllib.parse import urljoin
 
 import streamlit as st
 import pandas as pd
+
+# >>> NOVO: importar da utils.py
+from utils import check_iframe_allowed, infer_app_origin, get_page_screenshot_bytes
+
+import sys
+import asyncio
+
+# CORREÇÃO PARA O ERRO NotImplementedError NO WINDOWS
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 
 CSV_PATH = r"App/lista_produtos_ecommerce_SC_all_sites_exploded (3).csv"
@@ -199,7 +211,7 @@ def render_tab_ecom(
 
     # 2) filtros rápidos
     with r1c4:
-        only_found = st.checkbox("Somente FOUND", value=False)
+        only_found = st.checkbox("Somente com Anúncio de Pinus", value=True)
         has_ppm3 = st.checkbox("Somente com preço/m3", value=False)
 
     # 3) df auxiliar para opções dependentes
@@ -226,18 +238,6 @@ def render_tab_ecom(
     r2c1, r2c2, r2c3 = st.columns([2.0, 2.0, 2.0])
     with r2c1:
         busca_produto = st.text_input("Busca produto (nome)", placeholder="ex: painel pinus").strip()
-
-#    with r2c2:
-#        # faixa de preço/m3
-#        range_ppm3 = None
-#        if ppm3_col and df[ppm3_col].notna().any():
-#            vmin = float(df[ppm3_col].min())
-#            vmax = float(df[ppm3_col].max())
-#            if vmin == vmax:
-#                st.caption("Preço/m3 sem variação no dataset.")
-#            else:
-#                range_ppm3 = st.slider("Faixa preço/m3", float(vmin), float(vmax), (float(vmin), float(vmax)))
-
     with r2c3:
         st.caption("")
 
@@ -263,9 +263,6 @@ def render_tab_ecom(
     if has_ppm3 and ppm3_col:
         filtered = filtered[filtered[ppm3_col].notna()]
 
-#    if range_ppm3 and ppm3_col:
-#        filtered = filtered[filtered[ppm3_col].between(range_ppm3[0], range_ppm3[1])]
-
     if busca_produto and prod_name_col and prod_name_col in filtered.columns:
         filtered = filtered[_safe_series(filtered[prod_name_col]).str.contains(busca_produto, case=False, na=False)]
 
@@ -275,23 +272,14 @@ def render_tab_ecom(
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Empresas (filtradas)", int(filtered[nm_col].nunique()))
     k2.metric("Produtos (filtrados)", int(len(filtered)))
-#    if ppm3_col and filtered[ppm3_col].notna().any():
-#        k3.metric("Preço/m3 (mediana)", round(float(filtered[ppm3_col].median()), 2))
-#        k4.metric("Preço/m3 (mín)", round(float(filtered[ppm3_col].min()), 2))
-#    else:
-#        k3.metric("Preço/m3 (mediana)", "-")
-#        k4.metric("Preço/m3 (mín)", "-")
 
     st.divider()
 
     # =========================
     # EMPRESAS: 2 colunas
-    # - ESQUERDA: cards (2x2 por viewport) com scroll
-    # - DIREITA: detalhe da empresa
     # =========================
     st.markdown("#### Empresas")
 
-    # dataset de empresas (a partir do filtered)
     comp_view = (
         filtered.groupby(nm_col, dropna=False)
         .agg(
@@ -306,13 +294,12 @@ def render_tab_ecom(
         .reset_index()
     )
 
-    # ordenação por volume
     if "produtos" in comp_view.columns:
         comp_view = comp_view.sort_values("produtos", ascending=False)
 
-    left, right = st.columns([1.15, 1.0], gap="large")
+#    left, right = st.columns([1.15, 1.0], gap="large")
 
-    with left:
+    with st.container():
         st.caption("Cards (2x2). Role dentro do container para ver mais empresas.")
         with st.container(height=800, border=False):
             empresas_cards_df = comp_view.copy()
@@ -349,48 +336,48 @@ def render_tab_ecom(
                             },
                         )
 
-    with right:
-        st.caption("Detalhe da empresa")
-
-        empresas_opts = comp_view[nm_col].dropna().unique().tolist()
-        empresa_sel = st.selectbox("Escolha uma empresa", options=empresas_opts, index=0) if empresas_opts else None
-
-        if not empresa_sel:
-            st.info("Nenhuma empresa disponível com os filtros atuais.")
-        else:
-            row = comp_view[comp_view[nm_col] == empresa_sel].head(1)
-            r = row.iloc[0]
-
-            url = str(r.get("website_url", "") or "")
-            msg = str(r.get("msg", "") or "")
-            mun = str(r.get("municipio", "") or "")
-            uf = str(r.get("uf", "") or "")
-            stt = str(r.get("status", "") or "")
-
-            st.markdown(f"##### {empresa_sel}")
-            if mun or uf:
-                st.caption(f"📍 {mun} - {uf}".strip(" -"))
-            if stt:
-                st.caption(f"🟦 Status: {stt}")
-            if url:
-                st.markdown(f"[Abrir site]({url})")
-
-            st.divider()
-            st.markdown("**Resumo**")
-            st.markdown(_pretty_multiline(msg))
-
-            st.divider()
-            cA, cB = st.columns(2)
-            cA.metric("Produtos (filtrados)", int(filtered[_safe_series(filtered[nm_col]) == empresa_sel].shape[0]))
-
-            if ppm3_col:
-                sub = filtered[_safe_series(filtered[nm_col]) == empresa_sel]
-                if sub[ppm3_col].notna().any():
-                    cB.metric("Preço/m3 (mediana)", round(float(sub[ppm3_col].median()), 2))
-                else:
-                    cB.metric("Preço/m3 (mediana)", "-")
-            else:
-                cB.metric("Preço/m3 (mediana)", "-")
+#    with right:
+#        st.caption("Detalhe da empresa")
+#
+#        empresas_opts = comp_view[nm_col].dropna().unique().tolist()
+#        empresa_sel = st.selectbox("Escolha uma empresa", options=empresas_opts, index=0) if empresas_opts else None
+#
+#        if not empresa_sel:
+#            st.info("Nenhuma empresa disponível com os filtros atuais.")
+#        else:
+#            row = comp_view[comp_view[nm_col] == empresa_sel].head(1)
+#            r = row.iloc[0]
+#
+#            url = str(r.get("website_url", "") or "")
+#            msg = str(r.get("msg", "") or "")
+#            mun = str(r.get("municipio", "") or "")
+#            uf = str(r.get("uf", "") or "")
+#            stt = str(r.get("status", "") or "")
+#
+#            st.markdown(f"##### {empresa_sel}")
+#            if mun or uf:
+#                st.caption(f"📍 {mun} - {uf}".strip(" -"))
+#            if stt:
+#                st.caption(f"🟦 Status: {stt}")
+#            if url:
+#                st.markdown(f"[Abrir site]({url})")
+#
+#            st.divider()
+#            st.markdown("**Resumo**")
+#            st.markdown(_pretty_multiline(msg))
+#
+#            st.divider()
+#            cA, cB = st.columns(2)
+#            cA.metric("Produtos (filtrados)", int(filtered[_safe_series(filtered[nm_col]) == empresa_sel].shape[0]))
+#
+#            if ppm3_col:
+#                sub = filtered[_safe_series(filtered[nm_col]) == empresa_sel]
+#                if sub[ppm3_col].notna().any():
+#                    cB.metric("Preço/m3 (mediana)", round(float(sub[ppm3_col].median()), 2))
+#                else:
+#                    cB.metric("Preço/m3 (mediana)", "-")
+#            else:
+#                cB.metric("Preço/m3 (mediana)", "-")
 
     st.divider()
 
@@ -425,13 +412,54 @@ def render_tab_ecom(
 
     st.dataframe(display_df[table_cols], use_container_width=True, hide_index=True, height=560)
 
-    # Preview do produto
+    # =========================
+    # Preview do produto (XFO/CSP + fallback com screenshot)
+    # =========================
     if "product_url" in display_df.columns:
         st.markdown("#### Preview do produto")
+
         preview_options = display_df["product_url"].dropna().unique().tolist()
         if preview_options:
-            selected_url = st.selectbox("Selecionar URL para visualizar", preview_options)
+            selected_url = st.selectbox(
+                "Selecionar URL para visualizar",
+                preview_options,
+                key="preview_url_select",
+            )
+
             if selected_url:
-                st.components.v1.iframe(selected_url, height=520, scrolling=True)
+                app_origin = infer_app_origin()
+                result = check_iframe_allowed(selected_url, app_origin=app_origin)
+
+                with st.expander("Diagnóstico (headers)", expanded=False):
+                    st.write("**APP_ORIGIN:**", app_origin)
+                    st.write("**URL final (após redirects):**", result.final_url)
+                    st.write("**Decisão:**", result.decision)
+                    st.write("**Motivo:**", result.reason)
+                    st.write("**X-Frame-Options:**", result.x_frame_options or "—")
+                    st.write("**CSP frame-ancestors:**", result.csp_frame_ancestors or "—")
+
+                # 1) Caso ALLOW -> tenta iframe
+                if result.decision == "ALLOW":
+                    st.components.v1.iframe(result.final_url, height=520, scrolling=True)
+                    st.link_button("Abrir preview em nova aba", result.final_url)
+
+                # 2) Caso BLOCK/UNKNOWN -> tenta screenshot + botão
+                else:
+                    if result.decision == "BLOCK":
+                        st.warning("O site impede a exibição direta (iframe). Tentando capturar imagem...")
+                    else:
+                        st.info("Verificando disponibilidade de preview...")
+
+                    # Adicionando um feedback visual enquanto o Playwright trabalha
+                    with st.spinner("Acessando site para screenshot..."):
+                        png = get_page_screenshot_bytes(result.final_url)
+
+                    if png:
+                        st.image(png, caption=f"Preview de: {result.final_url}", use_container_width=True)
+                    else:
+                        st.error("Não foi possível gerar a imagem de preview.")
+                        st.info("Isso pode ocorrer por bloqueios anti-bot agressivos do site ou tempo de carregamento excedido.")
+
+                    st.link_button("Abrir site original", result.final_url)
         else:
             st.info("Não há URLs de produto disponíveis para preview.")
