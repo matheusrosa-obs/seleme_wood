@@ -1,5 +1,5 @@
 libnss3
-libatk-adwaita1.0-0
+libadwaita-1-0
 libatk-bridge2.0-0
 libcups2
 libdrm2
