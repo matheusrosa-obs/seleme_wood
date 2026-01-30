@@ -432,6 +432,23 @@ def render_tab_portfolio(
     # =========================
     # MAPA (placeholder) — opcional
     # =========================
+    # Se nenhum `placeholder_df` foi fornecido, tentar construir um a partir
+    # do DataFrame de empresas filtradas (`comp`) usando colunas de latitude/longitude.
+    if placeholder_df is None:
+        try:
+            if "nu_latitude" in comp.columns and "nu_longitude" in comp.columns:
+                ph = comp[["municipio", "_uf_", "nu_latitude", "nu_longitude"]].copy()
+                ph["nu_latitude"] = pd.to_numeric(ph["nu_latitude"], errors="coerce")
+                ph["nu_longitude"] = pd.to_numeric(ph["nu_longitude"], errors="coerce")
+                ph = ph.dropna(subset=["nu_latitude", "nu_longitude"])
+                if not ph.empty:
+                    ph["Quantidade"] = 1
+                    ph = ph.groupby(["municipio", "_uf_", "nu_latitude", "nu_longitude"], as_index=False)["Quantidade"].sum()
+                    ph = ph.rename(columns={"municipio": "Município", "_uf_": "UF"})
+                    placeholder_df = ph
+        except Exception:
+            placeholder_df = None
+
     if placeholder_df is not None and not placeholder_df.empty:
         st.divider()
         st.markdown("#### Mapa (placeholder)")
