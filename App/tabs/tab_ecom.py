@@ -19,7 +19,7 @@ if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 
-CSV_PATH = r"App/lista_produtos_ecommerce_SC_all_sites_exploded (3).csv"
+CSV_PATH = r"App/lista_produtos_ecommerce_SUL_all_sites_exploded.csv"
 
 
 # =========================
@@ -147,7 +147,7 @@ def render_tab_ecom(
     csv_path: str | Path = CSV_PATH,
 ) -> None:
     st.markdown("### E-commerces")
-    st.caption("UX no estilo Portfólio: filtros globais, cards de empresas e tabela de produtos. (Sem mapa)")
+#    st.caption("UX no estilo Portfólio: filtros globais, cards de empresas e tabela de produtos. (Sem mapa)")
 
     _inject_cards_css_once()
 
@@ -205,29 +205,30 @@ def render_tab_ecom(
     st.markdown("#### Filtros globais")
     r1c1, r1c2, r1c3, r1c4 = st.columns([2.2, 2.2, 2.2, 1.6])
 
-    # 1) Status primeiro
-    with r1c3:
-        sel_status = st.multiselect("Status", options=status_all, placeholder="Opcional") if status_all else []
 
-    # 2) filtros rápidos
-    with r1c4:
-        only_found = st.checkbox("Somente com Anúncio de Pinus", value=True)
-        has_ppm3 = st.checkbox("Somente com preço/m3", value=False)
-
-    # 3) df auxiliar para opções dependentes
-    df_opts = df.copy()
-    if status_col and sel_status:
-        df_opts = df_opts[_safe_series(df_opts[status_col]).isin(sel_status)]
-    if only_found and status_col:
-        df_opts = df_opts[_safe_series(df_opts[status_col]).str.upper().eq("FOUND")]
-
-    # 4) Município depende de status/only_found
-    cidades_all = sorted(_safe_series(df_opts[city_col]).dropna().unique().tolist()) if city_col else []
+    # 1) Estado (UF) agora em r1c2
+    ufs_permitidas = ["Santa Catarina", "Paraná", "Rio Grande do Sul"]
+    ufs_all = [uf for uf in ufs_permitidas if uf_col and uf in _safe_series(df[uf_col]).unique()]
     with r1c2:
+        sel_ufs = st.multiselect("Estado (UF)", options=ufs_all, placeholder="Opcional") if ufs_all else []
+
+    # 2) Município agora em r1c3 (filtra municípios conforme UF selecionado)
+    df_opts_mun = df.copy()
+    if uf_col and sel_ufs:
+        df_opts_mun = df_opts_mun[_safe_series(df_opts_mun[uf_col]).isin(sel_ufs)]
+    cidades_all = sorted(_safe_series(df_opts_mun[city_col]).dropna().unique().tolist()) if city_col else []
+    with r1c3:
         sel_cidades = st.multiselect("Município", options=cidades_all, placeholder="Opcional") if cidades_all else []
 
-    # 5) Empresa depende de status/only_found e também de município
-    df_opts2 = df_opts.copy()
+    # 3) filtros rápidos
+    with r1c4:
+        only_found = st.checkbox("Somente com Anúncio de Pinus", value=True)
+#        has_ppm3 = st.checkbox("Somente com preço/m3", value=False)
+
+    # 4) Empresa depende de UF/município
+    df_opts2 = df.copy()
+    if uf_col and sel_ufs:
+        df_opts2 = df_opts2[_safe_series(df_opts2[uf_col]).isin(sel_ufs)]
     if city_col and sel_cidades:
         df_opts2 = df_opts2[_safe_series(df_opts2[city_col]).isin(sel_cidades)]
     empresas_all = sorted(_safe_series(df_opts2[nm_col]).dropna().unique().tolist())
@@ -243,25 +244,26 @@ def render_tab_ecom(
 
     st.divider()
 
+
     # =========================
     # Aplicar filtros no DF (produtos)
     # =========================
     filtered = df.copy()
 
-    # Status/only_found primeiro (para coerência total)
-    if status_col and sel_status:
-        filtered = filtered[_safe_series(filtered[status_col]).isin(sel_status)]
-    if only_found and status_col:
-        filtered = filtered[_safe_series(filtered[status_col]).str.upper().eq("FOUND")]
-
+    # Filtros de UF e Município
+    if uf_col and sel_ufs:
+        filtered = filtered[_safe_series(filtered[uf_col]).isin(sel_ufs)]
     if city_col and sel_cidades:
         filtered = filtered[_safe_series(filtered[city_col]).isin(sel_cidades)]
+
+    if only_found and status_col:
+        filtered = filtered[_safe_series(filtered[status_col]).str.upper().eq("FOUND")]
 
     if sel_empresas:
         filtered = filtered[_safe_series(filtered[nm_col]).isin(sel_empresas)]
 
-    if has_ppm3 and ppm3_col:
-        filtered = filtered[filtered[ppm3_col].notna()]
+#    if has_ppm3 and ppm3_col:
+#        filtered = filtered[filtered[ppm3_col].notna()]
 
     if busca_produto and prod_name_col and prod_name_col in filtered.columns:
         filtered = filtered[_safe_series(filtered[prod_name_col]).str.contains(busca_produto, case=False, na=False)]
@@ -430,13 +432,13 @@ def render_tab_ecom(
                 app_origin = infer_app_origin()
                 result = check_iframe_allowed(selected_url, app_origin=app_origin)
 
-                with st.expander("Diagnóstico (headers)", expanded=False):
-                    st.write("**APP_ORIGIN:**", app_origin)
-                    st.write("**URL final (após redirects):**", result.final_url)
-                    st.write("**Decisão:**", result.decision)
-                    st.write("**Motivo:**", result.reason)
-                    st.write("**X-Frame-Options:**", result.x_frame_options or "—")
-                    st.write("**CSP frame-ancestors:**", result.csp_frame_ancestors or "—")
+#                with st.expander("Diagnóstico (headers)", expanded=False):
+#                    st.write("**APP_ORIGIN:**", app_origin)
+#                    st.write("**URL final (após redirects):**", result.final_url)
+#                    st.write("**Decisão:**", result.decision)
+#                    st.write("**Motivo:**", result.reason)
+#                    st.write("**X-Frame-Options:**", result.x_frame_options or "—")
+#                    st.write("**CSP frame-ancestors:**", result.csp_frame_ancestors or "—")
 
                 # 1) Caso ALLOW -> tenta iframe
                 if result.decision == "ALLOW":
@@ -446,7 +448,7 @@ def render_tab_ecom(
                 # 2) Caso BLOCK/UNKNOWN -> tenta screenshot + botão
                 else:
                     if result.decision == "BLOCK":
-                        st.warning("O site impede a exibição direta (iframe). Tentando capturar imagem...")
+                        st.warning("Capturando screenshot...")
                     else:
                         st.info("Verificando disponibilidade de preview...")
 

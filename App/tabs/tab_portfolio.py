@@ -129,7 +129,7 @@ def render_tab_portfolio(
     items_path: str,
 ) -> None:
     st.markdown("### Portfólio")
-    st.caption("Filtros globais no topo e duas tabelas: Empresas (cards) e Produtos (items).")
+#    st.caption("Filtros globais no topo e duas tabelas: Empresas (cards) e Produtos (items).")
 
     # =========================
     # Carregar CSVs
@@ -261,14 +261,14 @@ def render_tab_portfolio(
         sel_mat_norm = st.multiselect("Material", options=mat_norm_all, placeholder="Opcional") if mat_norm_all else []
         sel_mat_grupo = st.multiselect("Material (grupo)", options=mat_grupo_all, placeholder="Opcional") if mat_grupo_all else []
         only_pinus = st.checkbox("Somente com indício de pinus", value=True)
-        only_madeira = st.checkbox("Somente trabalha com madeira", value=False)
+#        only_madeira = st.checkbox("Somente trabalha com madeira", value=False)
 
-    r2c1, _, _ = st.columns([2.0, 2.0, 2.0])
-    with r2c1:
-        if total_max > 0:
-            range_total = st.slider("Faixa Itens (Total)", total_min, total_max, (total_min, total_max))
-        else:
-            range_total = None
+#    r2c1, _, _ = st.columns([2.0, 2.0, 2.0])
+#    with r2c1:
+#        if total_max > 0:
+#            range_total = st.slider("Faixa Itens (Total)", total_min, total_max, (total_min, total_max))
+#        else:
+#            range_total = None
 
     st.divider()
 
@@ -286,8 +286,8 @@ def render_tab_portfolio(
     if sel_municipios and "municipio" in comp.columns:
         comp = comp[comp["municipio"].astype(str).isin(sel_municipios)]
 
-    if range_total and "qtde_itens_total" in comp.columns:
-        comp = comp[comp["qtde_itens_total"].between(range_total[0], range_total[1])]
+#    if range_total and "qtde_itens_total" in comp.columns:
+#        comp = comp[comp["qtde_itens_total"].between(range_total[0], range_total[1])]
 
     if only_pinus:
         mask = pd.Series(False, index=comp.index)
@@ -299,8 +299,8 @@ def render_tab_portfolio(
             mask = mask | (comp["qtde_itens_menciona_pinus"] > 0)
         comp = comp[mask]
 
-    if only_madeira and "trabalha_com_madeira" in comp.columns:
-        comp = comp[_normalize_yes_no(comp["trabalha_com_madeira"])]
+#    if only_madeira and "trabalha_com_madeira" in comp.columns:
+#        comp = comp[_normalize_yes_no(comp["trabalha_com_madeira"])]
 
     # =========================
     # Aplicar filtros em ITEMS
@@ -312,9 +312,9 @@ def render_tab_portfolio(
             bool(sel_uf),
             bool(sel_empresas),
             bool(sel_municipios),
-            bool(range_total),
+#            bool(range_total),
             bool(only_pinus),
-            bool(only_madeira),
+    #        bool(only_madeira),
         ]
     )
 
@@ -450,10 +450,23 @@ def render_tab_portfolio(
             placeholder_df = None
 
     if placeholder_df is not None and not placeholder_df.empty:
+        # Remover registros do estado da Paraíba (UF = 'PB')
+        if "UF" in placeholder_df.columns:
+            placeholder_df = placeholder_df[placeholder_df["UF"].str.upper() != "PARAÍBA"]
+
         st.divider()
-        st.markdown("#### Mapa (placeholder)")
+        st.markdown("#### Mapa")
 
         if all(c in placeholder_df.columns for c in ["nu_latitude", "nu_longitude"]):
+            # construir hover_data explícito: mostrar apenas campos úteis e ocultar lat/lon
+            hover_data = {}
+            if "Quantidade" in placeholder_df.columns:
+                hover_data["Quantidade"] = True
+            if "UF" in placeholder_df.columns:
+                hover_data["UF"] = True
+            hover_data["nu_latitude"] = False
+            hover_data["nu_longitude"] = False
+
             fig_p = px.scatter_mapbox(
                 placeholder_df,
                 lat="nu_latitude",
@@ -461,6 +474,7 @@ def render_tab_portfolio(
                 size="Quantidade" if "Quantidade" in placeholder_df.columns else None,
                 color="UF" if "UF" in placeholder_df.columns else None,
                 hover_name="Município" if "Município" in placeholder_df.columns else None,
+                hover_data=hover_data,
                 center={"lat": -27.0, "lon": -50.0},
                 zoom=5,
                 size_max=30,
@@ -470,6 +484,7 @@ def render_tab_portfolio(
                 margin=dict(l=0, r=0, t=0, b=0),
                 height=520,
             )
-            st.plotly_chart(fig_p, use_container_width=True)
+            # ativar scrollZoom no Plotly para permitir zoom com roda do mouse
+            st.plotly_chart(fig_p, use_container_width=True, config={"scrollZoom": True, "displayModeBar": True})
         else:
             st.info("placeholder_df não possui nu_latitude/nu_longitude para exibir o mapa.")
