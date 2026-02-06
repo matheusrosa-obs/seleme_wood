@@ -190,9 +190,33 @@ def render_tab_ecom(
     if uf_col and uf_col in df.columns:
         df[uf_col] = _safe_series(df[uf_col]).str.strip()
 
-    # preço/m3 numérico
-    if ppm3_col and ppm3_col in df.columns:
-        df[ppm3_col] = _to_float_series(df[ppm3_col])
+    # Cálculo preciso de preço por m3
+    import numpy as np
+    # Limpeza de preço
+    if 'price_raw' in df.columns:
+        df['price_clean_str'] = df['price_raw'].astype(str).str.extract(r'(\d+(?:\.\d{3})*(?:,\d+)?)')[0]
+        df['price_clean_str'] = df['price_clean_str'].str.replace('.', '', regex=False)
+        df['price_clean_str'] = df['price_clean_str'].str.replace(',', '.', regex=False)
+        df['price_final'] = pd.to_numeric(df['price_clean_str'], errors='coerce')
+    # Garante que as colunas de dimensão sejam numéricas
+    cols_dim = ['length_mm', 'width_mm', 'thickness_mm']
+    for col in cols_dim:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Calcula volume_m3
+    if all(col in df.columns for col in cols_dim):
+        df['volume_m3'] = (df['length_mm'] * df['width_mm'] * df['thickness_mm']) / 1e9
+    else:
+        df['volume_m3'] = np.nan
+    # Calcula preço por m3
+    if 'price_final' in df.columns and 'volume_m3' in df.columns:
+        df['price_per_m3_calc'] = df['price_final'] / df['volume_m3']
+        df['price_per_m3_calc'] = df['price_per_m3_calc'].replace([np.inf, -np.inf], np.nan)
+        df['price_per_m3_calc'] = df['price_per_m3_calc'].round(2)
+    else:
+        df['price_per_m3_calc'] = np.nan
+    # Limpeza de colunas temporárias
+    df = df.drop(columns=['price_clean_str'], errors='ignore')
 
     # =========================
     # Opções estáveis
@@ -290,7 +314,7 @@ def render_tab_ecom(
             uf=(uf_col, "first") if uf_col else (nm_col, "first"),
             status=(status_col, "first") if status_col else (nm_col, "first"),
             produtos=(nm_col, "size"),
-            ppm3_mediana=(ppm3_col, "median") if ppm3_col else (nm_col, "first"),
+            ppm3_mediana=("price_per_m3_calc", "median"),
             msg=(msg_col, "first") if msg_col else (nm_col, "first"),
         )
         .reset_index()
@@ -303,7 +327,7 @@ def render_tab_ecom(
 
     with st.container():
         st.caption("Cards (2x2). Role dentro do container para ver mais empresas.")
-        with st.container(height=800, border=False):
+        with st.container(height=400, border=False):
             empresas_cards_df = comp_view.copy()
 
             for start in range(0, len(empresas_cards_df), 4):
@@ -333,7 +357,7 @@ def render_tab_ecom(
                             resumo=resumo,
                             kpis={
                                 "Produtos": produtos,
-                                "Status": stt or "—",
+#                                "Status": stt or "—",
                                 "Preço/m3 (med)": ppm3_med,
                             },
                         )
@@ -406,13 +430,13 @@ def render_tab_ecom(
         "name" if "name" in display_df.columns else prod_name_col,
         dims_raw_col,
         price_col,
-        ppm3_col,
+        "price_per_m3_calc" if "price_per_m3_calc" in display_df.columns else ppm3_col,
         "product_url" if "product_url" in display_df.columns else prod_url_col,
-        status_col,
+#        status_col,
     ]
     table_cols = [c for c in desired_cols if c and c in display_df.columns]
 
-    st.dataframe(display_df[table_cols], use_container_width=True, hide_index=True, height=560)
+    st.dataframe(display_df[table_cols], use_container_width=True, hide_index=True, )
 
     # =========================
     # Preview do produto (XFO/CSP + fallback com screenshot)
@@ -420,13 +444,24 @@ def render_tab_ecom(
     if "product_url" in display_df.columns:
         st.markdown("#### Preview do produto")
 
-        preview_options = display_df["product_url"].dropna().unique().tolist()
+        # Cria lista de tuplas (nome_produto, product_url)
+        preview_options = [
+            (row["name"] if "name" in display_df.columns else row.get(prod_name_col, row["product_url"]), row["product_url"])
+            for _, row in display_df.dropna(subset=["product_url"]).iterrows()
+        ]
+
         if preview_options:
-            selected_url = st.selectbox(
-                "Selecionar URL para visualizar",
-                preview_options,
+            # Exibe o nome do produto, mas seleciona a URL
+            option_labels = [name for name, url in preview_options]
+            option_urls = [url for name, url in preview_options]
+
+            selected_idx = st.selectbox(
+                "Selecionar produto para visualizar",
+                range(len(option_labels)),
+                format_func=lambda idx: option_labels[idx],
                 key="preview_url_select",
             )
+            selected_url = option_urls[selected_idx]
 
             if selected_url:
                 app_origin = infer_app_origin()
