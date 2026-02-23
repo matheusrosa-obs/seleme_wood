@@ -298,6 +298,13 @@ def render_tab_ecom(
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Empresas (filtradas)", int(filtered[nm_col].nunique()))
     k2.metric("Produtos (filtrados)", int(len(filtered)))
+    # KPI: Total de produtos identificados como Pinus
+    prod_name_col_for_pinus = prod_name_col if prod_name_col in filtered.columns else None
+    if prod_name_col_for_pinus:
+        pinus_count = _safe_series(filtered[prod_name_col_for_pinus]).str.contains("pinus", case=False, na=False).sum()
+    else:
+        pinus_count = 0
+    k3.metric("Produto Painel de Pinus", int(pinus_count))
 
     st.divider()
 
@@ -436,7 +443,22 @@ def render_tab_ecom(
     ]
     table_cols = [c for c in desired_cols if c and c in display_df.columns]
 
-    st.dataframe(display_df[table_cols], use_container_width=True, hide_index=True, )
+    # Renomeia as colunas para português
+    col_map = {
+        nm_col: "Empresa",
+        site_col: "Site",
+        city_col: "Município",
+        "name": "Produto",
+        prod_name_col: "Produto",
+        dims_raw_col: "Dimensões",
+        price_col: "Preço",
+        "price_per_m3_calc": "Preço por m³",
+        ppm3_col: "Preço por m³",
+        "product_url": "URL do produto",
+        prod_url_col: "URL do produto",
+    }
+    display_df_ren = display_df[table_cols].rename(columns={c: col_map.get(c, c) for c in table_cols})
+    st.dataframe(display_df_ren, use_container_width=True, hide_index=True)
 
     # =========================
     # Preview do produto (XFO/CSP + fallback com screenshot)

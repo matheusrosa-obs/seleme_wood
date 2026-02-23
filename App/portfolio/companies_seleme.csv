@@ -1,0 +1,12 @@
+﻿nm_empresa,website_url,query,status,message_pt,works_with_wood,works_with_pine_panel,pine_panel_flag,confidence_wood,confidence_pine_panel,evidence_snippet,materials_summary,item_count_total,item_count_wood_related,item_count_mentions_pinus,run_at,attempts
+Seleme Materiais De Construcao Limitada - Cacador,https://temp.selemewood.com.br/,painel de madeira pinus,FOUND,"A empresa trabalha com madeira, há menção da utilização de pinus, mas não foi encontrada informação de qual produto foi utilizado.",yes,yes,1,100,95,"- Product: BASEBOARD, Category: Wood, Mentions Pinus: Yes
+- Product: CROWN, Category: Wood, Mentions Pinus: No
+- Product: DOOR STILE, Category: Wood, Mentions Pinus: No
+- Product: BRICKMOULD, Category: Wood, Mentions Pinus: No
+- Product: PAINEL, Category: Wood, Mentions Pinus: No
+- Product: DOOR STOP, Category: Wood, Mentions Pinus: No
+- Product: STOP, Category: Wood, Mentions Pinus: No
+- Product: SUPERJAMB, Category: Wood, Mentions Pinus: No
+- Product: SPLIT JAMB, Category: Wood, Mentions Pinus: No
+- Product: CASING, Category: Wood, Mentions Pinus: No
+- Product: FLAT JAMB, Category: Wood, Mentions Pinus: No","A empresa oferece uma variedade de produtos de madeira, incluindo painéis, rodapés, molduras e batentes. Há menção da utilização de pinus, mas não foi encontrada informação de qual produto foi utilizado.",11,11,0,2026-02-23T12:10:56.980040+00:00,Navigated to the company website.; Scrolled down the homepage to inspect content.; Scrolled back to the top.; Clicked on 'Nossos Produtos'.; Clicked on the 'PAINEL' category.; Scrolled down the page extensively to extract product information.; Extracted product names and categories from the 'PAINEL' section and other visible wood-related categories.
